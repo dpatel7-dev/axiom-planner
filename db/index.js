@@ -21,10 +21,17 @@ async function initDb() {
   // Split on the section markers from schema.sql
   const sections = schema.split(/-- =+\n-- \d+\. /);
   // Phase 0 is the file header; phases 1+ are the real work.
-  const phases = sections.slice(1).map((s, i) => ({
-    name: s.split('\n')[0].replace(/—.*$/, '').trim() || `Phase ${i + 1}`,
-    sql: s
-  }));
+  // Each section after the regex looks like:
+  //   "CREATE TABLES (no-ops if they already exist)\n<sql>"
+  // So we extract the first line as the human-readable name, and run the rest as SQL.
+  const phases = sections.slice(1).map((s, i) => {
+    const newlineIdx = s.indexOf('\n');
+    const name = newlineIdx === -1
+      ? `Phase ${i + 1}`
+      : s.slice(0, newlineIdx).replace(/—.*$/, '').trim() || `Phase ${i + 1}`;
+    const sql = newlineIdx === -1 ? '' : s.slice(newlineIdx + 1);
+    return { name, sql };
+  });
 
   if (phases.length === 0) {
     // Fallback: schema didn't have section markers, run it as one block
