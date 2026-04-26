@@ -5,9 +5,11 @@ const path = require('path');
 const { initDb } = require('./db');
 
 const authRoutes = require('./routes/auth');
+const subjectsRoutes = require('./routes/subjects');
 const tasksRoutes = require('./routes/tasks');
 const notesRoutes = require('./routes/notes');
 const remindersRoutes = require('./routes/reminders');
+const importRoutes = require('./routes/import');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,9 +19,11 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/subjects', subjectsRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/reminders', remindersRoutes);
+app.use('/api/import', importRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

@@ -1,37 +1,34 @@
-# Axiom — An All-in-One Planner
+# Axiom — A Student Planner
 
-A full-stack planner with a cinematic dark aesthetic. Tasks, calendar, notes, reminders, and Duolingo-style streaks to keep you showing up every day.
+A flexible all-in-one planner built for students at any level — middle school, high school, or college. Track classes, assignments, notes, and reminders in one beautiful place.
 
 ## Features
 
-- 📋 **Tasks** with due dates, times, and priorities (high/medium/low)
-- 📅 **Calendar view** showing tasks and reminders as dots on each day
-- 📝 **Notes/journal** with auto-save as you type
-- 🔔 **Reminders** with in-app toasts + browser notifications
-- 🔥 **Streak tracking** — Duolingo-style daily login streaks with milestone quotes
-- 🔐 **User accounts** with secure password hashing (bcrypt) + JWT cookies
+- 📚 **Classes** — Add any class with a custom color (works for "Period 4 Math" or "ECON 301" alike)
+- 📋 **Tasks** by class — homework, essays, exams, quizzes, projects, labs, study sessions
+- 📅 **Calendar** with color-coded dots showing tasks per class
+- 📝 **Notes** that can be linked to a class
+- 🔔 **Reminders** with toast + browser notifications
+- 🎯 **Smart Today dashboard** — auto-shows Overdue, Due Today, Due This Week
+- 🔍 **Smart filters** — see Overdue, This Week, or filter by Class
+- 🔐 **Secure accounts** with bcrypt + JWT cookies
 
 ## Stack
 
 - **Backend:** Node.js + Express + PostgreSQL
-- **Frontend:** Vanilla HTML/CSS/JS (no build step, no framework)
-- **Auth:** bcryptjs + JWT in httpOnly cookies
+- **Frontend:** Vanilla HTML/CSS/JS (no build step)
 - **Deploy:** Render.com (free tier)
 
 ## Aesthetic
 
-Cinematic dark theme:
-- Deep warm black-brown palette with candle-gold accents
-- DM Serif Display for headings, Cormorant Garamond for accents, Inter for UI
-- Animated background: cinematic atmospheric photo + breathing warm glows + drifting fog + firefly particles + film grain + vignette
+Cinematic light theme:
+- Mt. Fuji at dawn as the background, with slow Ken Burns motion
+- Soft peach + powder blue palette with candle-gold accents
+- Layered animations: drifting clouds, dawn rays, floating wisps, breathing vignette
 
 ## Quick start
 
-See **DEPLOY.md** for step-by-step deployment instructions. TL;DR:
-
-1. Push this folder to a new GitHub repo
-2. On Render.com, click **New → Blueprint**, pick the repo
-3. Done — Render reads `render.yaml` and sets up everything
+See **DEPLOY.md** for step-by-step deployment instructions.
 
 ## Local dev
 
@@ -50,7 +47,16 @@ Open http://localhost:3000
 server.js              Express entry point
 db/schema.sql          Database tables
 db/index.js            PG connection pool
-routes/*.js            REST API routes
-public/                Static frontend (index.html, style.css, app.js)
+routes/
+  ├── auth.js          Login / signup / logout
+  ├── subjects.js      Classes CRUD (with task counts)
+  ├── tasks.js         Tasks CRUD (with subject join)
+  ├── notes.js         Notes CRUD (with subject link)
+  └── reminders.js     Reminders CRUD
+public/
+  ├── index.html       Single-page UI
+  ├── style.css        Styling
+  ├── app.js           Frontend logic
+  └── background.jpg   Mt. Fuji background
 render.yaml            One-click Render deploy config
 ```
