@@ -1,4 +1,9 @@
 -- Axiom Planner Database Schema
+-- Order matters: tables → migrations (add/drop columns on existing tables) → indexes
+
+-- =========================================================
+-- 1. CREATE TABLES (no-ops if they already exist)
+-- =========================================================
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -82,6 +87,27 @@ CREATE TABLE IF NOT EXISTS ical_imported (
   UNIQUE(user_id, ical_uid)
 );
 
+-- =========================================================
+-- 2. MIGRATIONS — must run BEFORE indexes that depend on these columns
+-- These are no-ops on fresh installs, but bring older databases up to date.
+-- =========================================================
+
+-- Drop legacy streak columns from older versions
+ALTER TABLE users DROP COLUMN IF EXISTS streak_count;
+ALTER TABLE users DROP COLUMN IF EXISTS longest_streak;
+ALTER TABLE users DROP COLUMN IF EXISTS last_active_date;
+
+-- Add new columns to tasks if upgrading from an older version
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE SET NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'assignment';
+
+-- Add subject_id to notes if upgrading
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE SET NULL;
+
+-- =========================================================
+-- 3. INDEXES — created AFTER migrations so all columns exist
+-- =========================================================
+
 CREATE INDEX IF NOT EXISTS idx_subjects_user ON subjects(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_subject ON tasks(subject_id);
@@ -93,11 +119,3 @@ CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(remind_at);
 CREATE INDEX IF NOT EXISTS idx_ical_feeds_user ON ical_feeds(user_id);
 CREATE INDEX IF NOT EXISTS idx_ical_imported_user ON ical_imported(user_id);
 CREATE INDEX IF NOT EXISTS idx_ical_imported_uid ON ical_imported(ical_uid);
-
--- Migrations for existing databases (safe no-ops on fresh installs)
-ALTER TABLE users DROP COLUMN IF EXISTS streak_count;
-ALTER TABLE users DROP COLUMN IF EXISTS longest_streak;
-ALTER TABLE users DROP COLUMN IF EXISTS last_active_date;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE SET NULL;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'assignment';
-ALTER TABLE notes ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE SET NULL;
