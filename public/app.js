@@ -51,12 +51,12 @@ const state = {
 };
 
 // ==========================================================
-// FIREFLY PARTICLES (animated bg layer)
+// BACKGROUND PARTICLES (animated bg layers — fireflies + sparks + dust)
 // ==========================================================
 function spawnParticles() {
-  const container = document.getElementById('bgParticles');
-  const count = 30;
-  for (let i = 0; i < count; i++) {
+  // Layer 1: slow golden fireflies (the original)
+  const fireflyContainer = document.getElementById('bgParticles');
+  for (let i = 0; i < 35; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
     p.style.left = Math.random() * 100 + '%';
@@ -64,11 +64,42 @@ function spawnParticles() {
     const size = 2 + Math.random() * 3;
     p.style.width = size + 'px';
     p.style.height = size + 'px';
-    p.style.setProperty('--dx', (Math.random() * 200 - 100) + 'px');
-    const dur = 15 + Math.random() * 25;
+    p.style.setProperty('--dx', (Math.random() * 240 - 120) + 'px');
+    const dur = 18 + Math.random() * 28;
     p.style.animationDuration = dur + 's';
     p.style.animationDelay = (Math.random() * dur) + 's';
-    container.appendChild(p);
+    fireflyContainer.appendChild(p);
+  }
+
+  // Layer 2: faster, brighter sparks (less of them, more dramatic)
+  const sparkContainer = document.getElementById('bgSparks');
+  for (let i = 0; i < 15; i++) {
+    const s = document.createElement('div');
+    s.className = 'spark';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = (100 + Math.random() * 10) + '%';
+    s.style.setProperty('--dx', (Math.random() * 100 - 50) + 'px');
+    const dur = 8 + Math.random() * 12;
+    s.style.animationDuration = dur + 's';
+    s.style.animationDelay = (Math.random() * dur) + 's';
+    sparkContainer.appendChild(s);
+  }
+
+  // Layer 3: large soft dust motes (very slow, drifting sideways more)
+  const dustContainer = document.getElementById('bgDust');
+  for (let i = 0; i < 12; i++) {
+    const d = document.createElement('div');
+    d.className = 'dust';
+    d.style.left = Math.random() * 100 + '%';
+    d.style.top = (100 + Math.random() * 30) + '%';
+    const size = 6 + Math.random() * 8;
+    d.style.width = size + 'px';
+    d.style.height = size + 'px';
+    d.style.setProperty('--dx', (Math.random() * 400 - 200) + 'px');
+    const dur = 35 + Math.random() * 35;
+    d.style.animationDuration = dur + 's';
+    d.style.animationDelay = (Math.random() * dur) + 's';
+    dustContainer.appendChild(d);
   }
 }
 

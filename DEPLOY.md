@@ -27,7 +27,8 @@ planner/
 └── public/
     ├── index.html         ← the whole UI
     ├── style.css          ← styling
-    └── app.js             ← frontend logic
+    ├── app.js             ← frontend logic
+    └── background.jpg     ← Mt. Fuji background image
 ```
 
 ---
@@ -225,6 +226,24 @@ If you want to run it on your Chromebook/Codespaces before deploying:
 - The 🔥 flame flickers constantly, drawing your eye to the number.
 
 This creates the same "don't break the chain" loop that Duolingo uses.
+
+---
+
+## Customizing the background
+
+The app uses `public/background.jpg` as the main backdrop, with a slow Ken Burns zoom and a layered animation system on top (drifting fog, warm dawn glows, particles, light rays, breathing vignette, film grain).
+
+To swap in a different image, just replace the file:
+
+1. Save your new image as `background.jpg` (1920x1080 or larger, jpg format)
+2. Drop it in `public/` replacing the existing one
+3. `git add public/background.jpg && git commit -m "New background" && git push`
+4. Render redeploys
+
+For best results, pick an image that's:
+- Wide aspect ratio (16:9 or wider)
+- Not too busy (the UI sits on top of it)
+- Has natural breathing room — peaceful landscapes work great
 
 ---
 

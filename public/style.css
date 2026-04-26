@@ -3,9 +3,9 @@
    ========================================================= */
 
 :root {
-  /* Palette — deep warm night, candle-gold accents */
-  --bg-base: #0a0806;
-  --bg-veil: rgba(10, 8, 6, 0.82);
+  /* Palette — refined dawn, peach-gold accents */
+  --bg-base: #0a0c10;
+  --bg-veil: rgba(10, 12, 16, 0.82);
   --ink: #f3ead9;
   --ink-dim: #b8ac96;
   --ink-faint: #746e60;
@@ -15,8 +15,8 @@
   --crimson: #c05a3e;
   --line: rgba(243, 234, 217, 0.12);
   --line-strong: rgba(243, 234, 217, 0.22);
-  --panel: rgba(20, 16, 12, 0.62);
-  --panel-hi: rgba(30, 24, 18, 0.75);
+  --panel: rgba(15, 18, 24, 0.62);
+  --panel-hi: rgba(25, 28, 36, 0.75);
   --danger: #d66849;
   --ok: #8fb67c;
 
@@ -46,7 +46,7 @@ body {
 }
 
 /* =========================================================
-   ANIMATED BACKGROUND LAYERS
+   ANIMATED BACKGROUND LAYERS — Cinematic baroque atmosphere
    ========================================================= */
 .bg-scene {
   position: fixed;
@@ -56,74 +56,156 @@ body {
   pointer-events: none;
 }
 
-/* Layer 1: Cinematic atmospheric image (from Unsplash) */
+/* Layer 1: Mt. Fuji background image with slow Ken Burns zoom + pan */
 .bg-image {
   position: absolute;
-  inset: -4%;
-  background-image:
-    url('https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=2400&q=80&auto=format&fit=crop');
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-image: url('/background.jpg');
   background-size: cover;
   background-position: center;
-  filter: brightness(0.55) saturate(0.85) contrast(1.05);
-  animation: bgDrift 60s ease-in-out infinite alternate;
+  filter: brightness(0.7) saturate(1.05) contrast(1.02);
+  animation: bgKenBurns 40s ease-in-out infinite alternate;
 }
 
-@keyframes bgDrift {
-  0%   { transform: scale(1.05) translate(0, 0); }
-  50%  { transform: scale(1.08) translate(-1%, -0.5%); }
-  100% { transform: scale(1.05) translate(0.5%, 0.5%); }
+/* Ken Burns — slow zoom and pan over the image */
+@keyframes bgKenBurns {
+  0% {
+    transform: scale(1.05) translate(-1%, -0.5%);
+  }
+  100% {
+    transform: scale(1.15) translate(2%, 1%);
+  }
 }
 
-/* Layer 2: warm candlelight glows that breathe */
+/* Layer 1.5: subtle color-tint pulse for cinematic mood breathing */
+.bg-tint {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%,
+    rgba(255, 220, 200, 0.08) 0%,
+    rgba(180, 160, 200, 0.10) 50%,
+    rgba(40, 50, 80, 0.20) 100%);
+  mix-blend-mode: soft-light;
+  animation: tintBreathe 18s ease-in-out infinite;
+}
+@keyframes tintBreathe {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.85; }
+}
+
+/* Layer 2: soft dawn light glows that breathe (5 of them) — peach + cool blue */
 .bg-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.55;
+  filter: blur(100px);
+  opacity: 0.45;
   mix-blend-mode: screen;
 }
 .bg-glow-1 {
   width: 560px; height: 560px;
-  background: radial-gradient(circle, #e9a65b 0%, transparent 70%);
-  top: 10%; left: 8%;
-  animation: glowPulse 9s ease-in-out infinite;
+  background: radial-gradient(circle, #ffd4b3 0%, transparent 70%);
+  top: 8%; left: 6%;
+  animation: glowPulse 9s ease-in-out infinite, glowDrift 28s ease-in-out infinite alternate;
 }
 .bg-glow-2 {
   width: 700px; height: 700px;
-  background: radial-gradient(circle, #c3683a 0%, transparent 70%);
-  bottom: -10%; right: -5%;
-  animation: glowPulse 12s ease-in-out infinite 2s;
+  background: radial-gradient(circle, #b8c9e0 0%, transparent 70%);
+  bottom: -12%; right: -6%;
+  animation: glowPulse 12s ease-in-out infinite 2s, glowDrift 34s ease-in-out infinite alternate-reverse;
 }
 .bg-glow-3 {
   width: 420px; height: 420px;
-  background: radial-gradient(circle, #8a5a2e 0%, transparent 70%);
-  top: 45%; left: 55%;
-  animation: glowPulse 14s ease-in-out infinite 4s;
+  background: radial-gradient(circle, #f4c3a0 0%, transparent 70%);
+  top: 42%; left: 52%;
+  animation: glowPulse 14s ease-in-out infinite 4s, glowDrift 40s ease-in-out infinite alternate;
+}
+.bg-glow-4 {
+  width: 360px; height: 360px;
+  background: radial-gradient(circle, #fde0c8 0%, transparent 70%);
+  top: 60%; left: 12%;
+  animation: glowPulse 11s ease-in-out infinite 1s, glowDrift 30s ease-in-out infinite alternate-reverse;
+  opacity: 0.35;
+}
+.bg-glow-5 {
+  width: 480px; height: 480px;
+  background: radial-gradient(circle, #c9d4e8 0%, transparent 70%);
+  top: 18%; right: 14%;
+  animation: glowPulse 13s ease-in-out infinite 3s, glowDrift 36s ease-in-out infinite alternate;
+  opacity: 0.4;
 }
 
 @keyframes glowPulse {
-  0%, 100% { transform: scale(1) translate(0, 0); opacity: 0.4; }
-  50%      { transform: scale(1.15) translate(10px, -10px); opacity: 0.65; }
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.6; }
+}
+@keyframes glowDrift {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(40px, -30px) scale(1.18); }
 }
 
-/* Layer 3: drifting fog */
+/* Layer 3: TWO fog layers drifting in opposite directions — soft cloud feel */
 .bg-fog {
   position: absolute;
-  inset: -20%;
+  inset: -25%;
   background:
-    radial-gradient(ellipse at 20% 80%, rgba(100, 70, 40, 0.25), transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(60, 40, 25, 0.3), transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(30, 20, 15, 0.15), transparent 70%);
-  animation: fogDrift 40s linear infinite;
+    radial-gradient(ellipse at 20% 80%, rgba(220, 230, 245, 0.18), transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(255, 220, 200, 0.15), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(200, 215, 240, 0.10), transparent 70%);
+  animation: fogDrift1 50s linear infinite;
+  mix-blend-mode: soft-light;
+}
+.bg-fog-2 {
+  position: absolute;
+  inset: -25%;
+  background:
+    radial-gradient(ellipse at 70% 70%, rgba(255, 215, 195, 0.12), transparent 55%),
+    radial-gradient(ellipse at 30% 30%, rgba(195, 210, 235, 0.15), transparent 55%);
+  animation: fogDrift2 70s linear infinite;
   mix-blend-mode: soft-light;
 }
 
-@keyframes fogDrift {
+@keyframes fogDrift1 {
   from { transform: translate(0, 0); }
-  to   { transform: translate(-10%, 5%); }
+  to   { transform: translate(-12%, 6%); }
+}
+@keyframes fogDrift2 {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(15%, -8%); }
 }
 
-/* Layer 4: floating firefly particles (JS-generated) */
+/* Layer 4: AURORA light shafts — soft dawn rays */
+.bg-aurora {
+  position: absolute;
+  inset: -50%;
+  background:
+    linear-gradient(115deg,
+      transparent 0%,
+      transparent 38%,
+      rgba(255, 220, 200, 0.05) 45%,
+      rgba(255, 220, 200, 0.12) 50%,
+      rgba(255, 220, 200, 0.05) 55%,
+      transparent 62%,
+      transparent 100%),
+    linear-gradient(105deg,
+      transparent 0%,
+      transparent 60%,
+      rgba(220, 200, 230, 0.04) 68%,
+      rgba(220, 200, 230, 0.10) 72%,
+      rgba(220, 200, 230, 0.04) 76%,
+      transparent 82%,
+      transparent 100%);
+  mix-blend-mode: screen;
+  animation: auroraSweep 22s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes auroraSweep {
+  0%, 100% { transform: translate(-3%, -3%) rotate(-1deg); opacity: 0.6; }
+  50%      { transform: translate(3%, 3%) rotate(1deg); opacity: 1; }
+}
+
+/* Layer 5: floating soft white wisps (slow, drifting upward) */
 .bg-particles {
   position: absolute;
   inset: 0;
@@ -131,44 +213,96 @@ body {
 .particle {
   position: absolute;
   width: 3px; height: 3px;
-  background: radial-gradient(circle, #f0c274 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, transparent 70%);
   border-radius: 50%;
   opacity: 0;
   animation: particleFloat linear infinite;
+  filter: blur(0.5px);
 }
 
 @keyframes particleFloat {
   0%   { transform: translate(0, 0) scale(0.5); opacity: 0; }
-  10%  { opacity: 0.8; }
-  90%  { opacity: 0.8; }
+  10%  { opacity: 0.7; }
+  50%  { transform: translate(calc(var(--dx, 100px) * 0.5), -55vh) scale(1.1); opacity: 0.5; }
+  90%  { opacity: 0.7; }
   100% { transform: translate(var(--dx, 100px), -110vh) scale(1); opacity: 0; }
 }
 
-/* Layer 5: film grain */
+/* Layer 5b: faster, smaller bright pinpoints (like distant snowflakes) */
+.bg-sparks {
+  position: absolute;
+  inset: 0;
+}
+.spark {
+  position: absolute;
+  width: 2px; height: 2px;
+  background: #ffffff;
+  border-radius: 50%;
+  opacity: 0;
+  box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.7);
+  animation: sparkRise linear infinite;
+}
+@keyframes sparkRise {
+  0%   { transform: translate(0, 0) scale(0.3); opacity: 0; }
+  15%  { opacity: 0.85; }
+  85%  { opacity: 0.85; }
+  100% { transform: translate(var(--dx, 60px), -100vh) scale(0.8); opacity: 0; }
+}
+
+/* Layer 5c: large soft mist motes drifting (cloudlike) */
+.bg-dust {
+  position: absolute;
+  inset: 0;
+}
+.dust {
+  position: absolute;
+  width: 8px; height: 8px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0;
+  animation: dustDrift linear infinite;
+  filter: blur(2px);
+}
+@keyframes dustDrift {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  20%  { opacity: 0.4; }
+  80%  { opacity: 0.4; }
+  100% { transform: translate(var(--dx, 200px), -100vh); opacity: 0; }
+}
+
+/* Layer 6: film grain (animated, subtle) */
 .bg-grain {
   position: absolute;
   inset: 0;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
-  opacity: 0.08;
+  opacity: 0.06;
   mix-blend-mode: overlay;
-  animation: grainShift 0.8s steps(4) infinite;
+  animation: grainShift 0.6s steps(5) infinite;
   pointer-events: none;
 }
 
 @keyframes grainShift {
   0%, 100% { transform: translate(0, 0); }
-  25%      { transform: translate(-2%, 1%); }
-  50%      { transform: translate(1%, -2%); }
-  75%      { transform: translate(-1%, 2%); }
+  20%      { transform: translate(-2%, 1%); }
+  40%      { transform: translate(1%, -2%); }
+  60%      { transform: translate(-1%, -1%); }
+  80%      { transform: translate(2%, 1%); }
 }
 
-/* Layer 6: vignette */
+/* Layer 7: vignette that breathes (subtle so light image isn't crushed) */
 .bg-vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.75) 100%);
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(20,30,50,0.45) 100%);
   pointer-events: none;
+  animation: vignetteBreathe 9s ease-in-out infinite;
 }
+
+@keyframes vignetteBreathe {
+  0%, 100% { background: radial-gradient(ellipse at center, transparent 38%, rgba(20,30,50,0.42) 100%); }
+  50%      { background: radial-gradient(ellipse at center, transparent 32%, rgba(20,30,50,0.50) 100%); }
+}
+
 
 /* =========================================================
    SCREENS
