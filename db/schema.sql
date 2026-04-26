@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS ical_feeds (
   user_id INT REFERENCES users(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
   label VARCHAR(100) DEFAULT 'School Calendar',
+  feed_type VARCHAR(20) DEFAULT 'assignments',
   last_synced TIMESTAMP,
   last_status VARCHAR(50),
   last_error TEXT,
@@ -103,6 +104,9 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'assignment'
 
 -- Add subject_id to notes if upgrading
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id) ON DELETE SET NULL;
+
+-- Add feed_type to ical_feeds (classes vs assignments) if upgrading
+ALTER TABLE ical_feeds ADD COLUMN IF NOT EXISTS feed_type VARCHAR(20) DEFAULT 'assignments';
 
 -- =========================================================
 -- 3. INDEXES — created AFTER migrations so all columns exist

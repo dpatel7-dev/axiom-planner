@@ -43,9 +43,9 @@ const api = {
   saveGeminiKey: (gemini_api_key) => api.req('/api/import/settings', { method: 'POST', body: JSON.stringify({ gemini_api_key }) }),
   removeGeminiKey: () => api.req('/api/import/settings', { method: 'DELETE' }),
   feeds: () => api.req('/api/import/feeds'),
-  addFeed: (url, label) => api.req('/api/import/feeds', { method: 'POST', body: JSON.stringify({ url, label }) }),
+  addFeed: (url, label, feed_type) => api.req('/api/import/feeds', { method: 'POST', body: JSON.stringify({ url, label, feed_type }) }),
   deleteFeed: (id) => api.req('/api/import/feeds/' + id, { method: 'DELETE' }),
-  syncFeed: (id, useAi) => api.req('/api/import/feeds/' + id + '/sync', { method: 'POST', body: JSON.stringify({ useAi, daysAhead: 21 }) }),
+  syncFeed: (id) => api.req('/api/import/feeds/' + id + '/sync', { method: 'POST', body: JSON.stringify({ daysAhead: 28 }) }),
 };
 
 // App state
@@ -80,6 +80,23 @@ const SUBJECT_COLORS = [
   '#a8b87c', // olive
   '#9cabbf', // slate blue
 ];
+
+// ==========================================================
+// LOGO ROTATION — pick one of 42 randomly each pageload, set favicon too
+// ==========================================================
+function setRandomLogo() {
+  const idx = Math.floor(Math.random() * 42);
+  const src = `/logos/${idx}.png`;
+  const fav = `/logos/${idx}-fav.png`;
+
+  const main = document.getElementById('brandLogoMain');
+  const auth = document.getElementById('brandLogoAuth');
+  if (main) main.src = src;
+  if (auth) auth.src = src;
+
+  const favicon = document.getElementById('favicon');
+  if (favicon) favicon.href = fav;
+}
 
 // ==========================================================
 // BACKGROUND PARTICLES
@@ -333,6 +350,7 @@ function filterTasks(tasks) {
   let filtered = [...tasks];
   const todayStr = new Date().toISOString().slice(0, 10);
   const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const twoWeeksOut = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   if (state.taskFilter === 'open') filtered = filtered.filter(t => !t.completed);
   if (state.taskFilter === 'done') filtered = filtered.filter(t => t.completed);
@@ -345,6 +363,10 @@ function filterTasks(tasks) {
   if (state.taskFilter === 'week') {
     filtered = filtered.filter(t => !t.completed && t.due_date &&
       t.due_date.slice(0, 10) >= todayStr && t.due_date.slice(0, 10) <= weekFromNow);
+  }
+  if (state.taskFilter === 'exams') {
+    filtered = filtered.filter(t => !t.completed && (t.type === 'exam' || t.type === 'quiz') &&
+      t.due_date && t.due_date.slice(0, 10) >= todayStr && t.due_date.slice(0, 10) <= twoWeeksOut);
   }
   if (state.taskSubjectFilter) {
     filtered = filtered.filter(t => String(t.subject_id) === state.taskSubjectFilter);
@@ -818,6 +840,7 @@ function renderToday() {
 
   const todayStr = now.toISOString().slice(0, 10);
   const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const twoWeeksOut = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // Overdue
   const overdue = state.tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) < todayStr);
@@ -830,6 +853,23 @@ function renderToday() {
     overdueList.innerHTML = overdue.slice(0, 5).map(taskHTML).join('');
     attachTaskHandlers(overdueList);
   }
+
+  // Tests & Quizzes (next 14 days)
+  const exams = state.tasks.filter(t => !t.completed && (t.type === 'exam' || t.type === 'quiz')
+    && t.due_date && t.due_date.slice(0, 10) >= todayStr && t.due_date.slice(0, 10) <= twoWeeksOut)
+    .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
+  const examsPanel = document.getElementById('examsPanel');
+  const examsList = document.getElementById('examsList');
+  if (exams.length === 0) {
+    examsPanel.style.display = 'none';
+  } else {
+    examsPanel.style.display = '';
+    examsList.innerHTML = exams.slice(0, 5).map(taskHTML).join('');
+    attachTaskHandlers(examsList);
+  }
+
+  // Exam banner — show if any exam/quiz within the next 3 days
+  updateExamBanner(exams);
 
   // Due Today
   const todayTasks = state.tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) === todayStr);
@@ -875,8 +915,63 @@ function renderToday() {
   }
 }
 
+// Show banner when a test/quiz is within 3 days, unless dismissed for that exam
+function updateExamBanner(exams) {
+  const banner = document.getElementById('examBanner');
+  if (!banner) return;
+  const now = new Date();
+  const threeDays = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const todayStr = now.toISOString().slice(0, 10);
+
+  // Find earliest exam within 3 days that isn't dismissed
+  const dismissedKey = 'axiom_dismissed_exams';
+  const dismissed = new Set(JSON.parse(localStorage.getItem(dismissedKey) || '[]'));
+  const candidate = exams.find(e => {
+    if (dismissed.has(`${e.id}`)) return false;
+    if (!e.due_date) return false;
+    const d = new Date(e.due_date.slice(0, 10) + 'T00:00:00');
+    return d >= now && d <= threeDays;
+  });
+
+  if (!candidate) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  // Build human-friendly text
+  const dueDate = new Date(candidate.due_date.slice(0, 10) + 'T12:00:00');
+  const ymd = candidate.due_date.slice(0, 10);
+  let when;
+  if (ymd === todayStr) when = 'today';
+  else {
+    const tom = new Date(now); tom.setDate(tom.getDate() + 1);
+    if (ymd === tom.toISOString().slice(0, 10)) when = 'tomorrow';
+    else when = 'on ' + dueDate.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+  const subjectStr = candidate.subject_name ? candidate.subject_name + ' · ' : '';
+  const typeWord = candidate.type === 'exam' ? 'Test' : 'Quiz';
+  document.getElementById('examBannerTitle').textContent = `${typeWord} ${when}: ${candidate.title}`;
+  document.getElementById('examBannerSub').textContent = subjectStr + dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  banner.style.display = '';
+  banner.dataset.examId = candidate.id;
+}
+
+// Wire up the banner close button
+document.getElementById('examBannerClose').addEventListener('click', () => {
+  const banner = document.getElementById('examBanner');
+  const id = banner.dataset.examId;
+  if (id) {
+    const dismissedKey = 'axiom_dismissed_exams';
+    const dismissed = new Set(JSON.parse(localStorage.getItem(dismissedKey) || '[]'));
+    dismissed.add(id);
+    localStorage.setItem(dismissedKey, JSON.stringify([...dismissed]));
+  }
+  banner.style.display = 'none';
+});
+
 // ==========================================================
-// IMPORT VIEW — Veracross/iCal feeds + Gemini AI
+// IMPORT VIEW — Two feeds (classes + assignments) + Gemini AI
 // ==========================================================
 async function loadImportView() {
   await Promise.all([loadAiStatus(), loadFeeds()]);
@@ -911,7 +1006,7 @@ document.getElementById('saveKeyBtn').addEventListener('click', async () => {
   try {
     await api.saveGeminiKey(key);
     document.getElementById('geminiKeyInput').value = '';
-    addSyncEntry('AI assistant connected successfully.', 'ok');
+    addSyncEntry('AI assistant connected.', 'ok');
     await loadAiStatus();
   } catch (err) {
     alert('Could not validate key: ' + err.message);
@@ -931,77 +1026,101 @@ document.getElementById('removeKeyBtn').addEventListener('click', async () => {
 async function loadFeeds() {
   try {
     const { feeds } = await api.feeds();
-    const list = document.getElementById('feedsList');
-    if (feeds.length === 0) {
-      list.innerHTML = '<p class="list-empty" style="margin-top:16px">No calendar feeds yet. Paste a URL above to add one.</p>';
-      return;
-    }
-    list.innerHTML = feeds.map(f => {
-      const lastSync = f.last_synced ? new Date(f.last_synced).toLocaleString() : 'Never synced';
-      const errClass = f.last_status === 'error' ? 'error' : '';
-      const errMsg = f.last_status === 'error' ? ` · ${escapeHtml(f.last_error || 'Unknown error')}` : '';
-      return `
-        <div class="feed-item" data-id="${f.id}">
-          <div class="feed-icon">📅</div>
-          <div class="feed-body">
-            <div class="feed-label">${escapeHtml(f.label)}</div>
-            <div class="feed-url">${escapeHtml(f.url)}</div>
-            <div class="feed-meta ${errClass}">Last sync: ${escapeHtml(lastSync)}${errMsg}</div>
-          </div>
-          <div class="feed-actions">
-            <button class="btn-sync" data-act="sync">Sync Now</button>
-            <button class="icon-btn" data-act="delete" title="Remove feed">×</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    const classesContainer = document.getElementById('classesFeedList');
+    const assignmentsContainer = document.getElementById('assignmentsFeedList');
 
-    list.querySelectorAll('.feed-item').forEach(el => {
-      const id = +el.dataset.id;
-      el.querySelector('[data-act="sync"]').addEventListener('click', () => syncFeed(id, el));
-      el.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-        if (!confirm('Remove this calendar feed? Existing imported tasks will stay.')) return;
-        await api.deleteFeed(id);
-        await loadFeeds();
+    const classes = feeds.filter(f => f.feed_type === 'classes');
+    const assignments = feeds.filter(f => f.feed_type !== 'classes');
+
+    classesContainer.innerHTML = renderFeedListHtml(classes);
+    assignmentsContainer.innerHTML = renderFeedListHtml(assignments);
+
+    [classesContainer, assignmentsContainer].forEach(container => {
+      container.querySelectorAll('.feed-item').forEach(el => {
+        const id = +el.dataset.id;
+        el.querySelector('[data-act="sync"]').addEventListener('click', () => syncFeedAndRefresh(id, el));
+        el.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+          if (!confirm('Remove this feed? Imported tasks/classes stay.')) return;
+          await api.deleteFeed(id);
+          await loadFeeds();
+        });
       });
     });
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) { console.error(e); }
 }
 
-document.getElementById('addFeedBtn').addEventListener('click', async () => {
-  const url = document.getElementById('feedUrlInput').value.trim();
-  const label = document.getElementById('feedLabelInput').value.trim() || 'School Calendar';
+function renderFeedListHtml(feeds) {
+  if (feeds.length === 0) return '';
+  return feeds.map(f => {
+    const lastSync = f.last_synced ? formatRelative(f.last_synced) : 'Never synced';
+    const errClass = f.last_status === 'error' ? 'error' : '';
+    const errMsg = f.last_status === 'error' ? ` · ${escapeHtml(f.last_error || 'Error')}` : '';
+    return `
+      <div class="feed-item" data-id="${f.id}">
+        <div class="feed-icon">${f.feed_type === 'classes' ? '🗓' : '📝'}</div>
+        <div class="feed-body">
+          <div class="feed-label">${escapeHtml(f.label)}</div>
+          <div class="feed-meta ${errClass}">${escapeHtml(lastSync)}${errMsg}</div>
+        </div>
+        <div class="feed-actions">
+          <button class="btn-sync" data-act="sync">Sync</button>
+          <button class="icon-btn" data-act="delete" title="Remove">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function formatRelative(iso) {
+  const then = new Date(iso);
+  const diff = Date.now() - then.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just synced';
+  if (mins < 60) return `Synced ${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Synced ${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `Synced ${days}d ago`;
+  return `Synced ${then.toLocaleDateString()}`;
+}
+
+document.getElementById('addClassesFeedBtn').addEventListener('click', () => addFeed('classes'));
+document.getElementById('addAssignmentsFeedBtn').addEventListener('click', () => addFeed('assignments'));
+
+async function addFeed(feedType) {
+  const urlInput = document.getElementById(feedType === 'classes' ? 'classesFeedUrl' : 'assignmentsFeedUrl');
+  const labelInput = document.getElementById(feedType === 'classes' ? 'classesFeedLabel' : 'assignmentsFeedLabel');
+  const url = urlInput.value.trim();
+  const label = labelInput.value.trim() || (feedType === 'classes' ? 'Class Schedule' : 'Assignments');
   if (!url) return alert('Paste a calendar URL first.');
   try {
-    await api.addFeed(url, label);
-    document.getElementById('feedUrlInput').value = '';
-    document.getElementById('feedLabelInput').value = '';
-    addSyncEntry(`Added feed "${label}". Click Sync Now to import assignments.`, 'ok');
+    await api.addFeed(url, label, feedType);
+    urlInput.value = '';
+    labelInput.value = '';
+    addSyncEntry(`Added ${feedType === 'classes' ? 'class schedule' : 'assignments'} feed "${label}". Click Sync to import.`, 'ok');
     await loadFeeds();
   } catch (err) {
     alert(err.message);
   }
-});
+}
 
-async function syncFeed(id, el) {
+async function syncFeedAndRefresh(id, el) {
   const btn = el.querySelector('.btn-sync');
   btn.disabled = true;
   btn.textContent = 'Syncing...';
   addSyncEntry('Fetching calendar...', '');
   try {
-    const result = await api.syncFeed(id, true);
-    const aiNote = result.ai_used ? ' <strong>(AI-transformed)</strong>' : ' (simple import — connect AI for better results)';
-    addSyncEntry(`<strong>${result.created}</strong> new task${result.created === 1 ? '' : 's'} imported${aiNote}. ${result.skipped} already existed.`, 'ok');
-    // Reload tasks so the new ones appear
+    const result = await api.syncFeed(id);
+    const aiNote = result.ai_used ? ' <strong>(AI-organized)</strong>' : '';
+    addSyncEntry(`<strong>${result.message}</strong>${aiNote}`, 'ok');
     await Promise.all([loadTasks(), loadSubjects(), loadFeeds()]);
+    populateSubjectSelects();
     renderAll();
   } catch (err) {
     addSyncEntry('Sync failed: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Sync Now';
+    btn.textContent = 'Sync';
   }
 }
 
@@ -1012,7 +1131,6 @@ function addSyncEntry(html, kind = '') {
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   entry.innerHTML = `<span style="opacity:0.6">[${time}]</span> ${html}`;
   log.insertBefore(entry, log.firstChild);
-  // Keep only last 8 entries
   while (log.children.length > 8) log.removeChild(log.lastChild);
 }
 
@@ -1083,6 +1201,7 @@ function toDateStr(y, m, d) {
 // STARTUP
 // ==========================================================
 async function init() {
+  setRandomLogo();
   spawnParticles();
   try {
     await enterApp();

@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Axiom — Your Planner</title>
-  <meta name="description" content="A flexible all-in-one planner for students." />
+  <meta name="description" content="A flexible planner for students, with AI-powered class import." />
+
+  <!-- Favicon set dynamically by app.js to a random logo -->
+  <link rel="icon" type="image/png" id="favicon" href="/logos/0-fav.png" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,11 +40,11 @@
   <div id="authScreen" class="screen active">
     <div class="auth-wrap">
       <div class="brand">
-        <div class="brand-mark">A</div>
+        <img class="brand-logo" id="brandLogoAuth" alt="" />
         <div class="brand-name">Axiom</div>
       </div>
       <h1 class="auth-title">Your time,<br/><em>refined.</em></h1>
-      <p class="auth-subtitle">A flexible planner built for students. Track classes, assignments, exams, and notes — all in one beautiful place.</p>
+      <p class="auth-subtitle">A flexible planner for students. Import your class schedule and assignments — AI organizes everything for you.</p>
 
       <div class="auth-card">
         <div class="tabs">
@@ -62,7 +65,7 @@
           <button type="submit" class="btn-primary" id="authSubmit">Enter Axiom</button>
         </form>
 
-        <p class="auth-foot">Private. Local. Beautifully yours.</p>
+        <p class="auth-foot">Built with care, for students.</p>
       </div>
     </div>
   </div>
@@ -72,7 +75,7 @@
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="brand small">
-          <div class="brand-mark">A</div>
+          <img class="brand-logo" id="brandLogoMain" alt="" />
           <div class="brand-name">Axiom</div>
         </div>
       </div>
@@ -119,18 +122,32 @@
     </aside>
 
     <main class="main">
-      <!-- TODAY VIEW — Smart dashboard -->
+      <!-- Test/Quiz alert banner — appears when a test is within 3 days -->
+      <div id="examBanner" class="exam-banner" style="display:none">
+        <div class="exam-banner-icon">⚡</div>
+        <div class="exam-banner-text">
+          <strong id="examBannerTitle"></strong>
+          <span id="examBannerSub"></span>
+        </div>
+        <button class="exam-banner-close" id="examBannerClose">×</button>
+      </div>
+
+      <!-- TODAY VIEW -->
       <section class="view active" data-view="today">
         <header class="view-head">
           <p class="view-kicker" id="todayDate">—</p>
           <h1 class="view-title" id="todayGreeting">Good evening.</h1>
-          <p class="view-sub">Here's everything that matters right now.</p>
+          <p class="view-sub">Here's what matters right now.</p>
         </header>
 
         <div class="today-grid">
           <div class="panel panel-warn" id="overduePanel">
             <h3 class="panel-title"><span class="dot dot-danger"></span>Overdue</h3>
             <div id="overdueList" class="list"></div>
+          </div>
+          <div class="panel panel-exams" id="examsPanel">
+            <h3 class="panel-title"><span class="dot dot-orange"></span>Tests & Quizzes</h3>
+            <div id="examsList" class="list"></div>
           </div>
           <div class="panel">
             <h3 class="panel-title"><span class="dot dot-gold"></span>Due Today</h3>
@@ -141,7 +158,7 @@
             <div id="weekTasksList" class="list"></div>
           </div>
           <div class="panel">
-            <h3 class="panel-title"><span class="dot dot-soft"></span>Upcoming Reminders</h3>
+            <h3 class="panel-title"><span class="dot dot-soft"></span>Reminders</h3>
             <div id="todayRemindersList" class="list"></div>
           </div>
         </div>
@@ -170,6 +187,7 @@
           <button class="chip" data-filter="overdue">Overdue</button>
           <button class="chip" data-filter="today">Today</button>
           <button class="chip" data-filter="week">This Week</button>
+          <button class="chip" data-filter="exams">Tests & Quizzes</button>
           <span class="filter-sep"></span>
           <select class="chip-select" id="subjectFilterSelect">
             <option value="">All Classes</option>
@@ -179,13 +197,13 @@
         <div id="tasksList" class="list big"></div>
       </section>
 
-      <!-- SUBJECTS / CLASSES VIEW — Unique feature -->
+      <!-- CLASSES VIEW -->
       <section class="view" data-view="subjects">
         <header class="view-head row">
           <div>
             <p class="view-kicker">Classes</p>
             <h1 class="view-title">Your courses.</h1>
-            <p class="view-sub">Whether you call it Period 4 or ECON 301 — track everything by class.</p>
+            <p class="view-sub">Each class can hold its own color, teacher, room — and assignments link to it automatically.</p>
           </div>
           <button class="btn-primary" id="newSubjectBtn">+ Add Class</button>
         </header>
@@ -254,60 +272,91 @@
         <div id="remindersList" class="list big"></div>
       </section>
 
-      <!-- IMPORT VIEW — Veracross/iCal sync + AI -->
+      <!-- IMPORT VIEW — Two feeds + AI -->
       <section class="view" data-view="import">
         <header class="view-head">
           <p class="view-kicker">Import</p>
           <h1 class="view-title">Bring your school in.</h1>
-          <p class="view-sub">Subscribe to your Veracross (or any iCal) calendar feed. Axiom will pull your assignments and turn them into clean, organized tasks — automatically.</p>
+          <p class="view-sub">Connect your calendar feeds — Axiom's AI organizes the rest.</p>
         </header>
 
-        <!-- AI Setup Panel -->
-        <div class="panel" style="margin-bottom:24px;">
+        <!-- AI Setup -->
+        <div class="panel panel-soft">
           <h3 class="panel-title">
             <span class="dot dot-gold"></span>AI Assistant
             <span id="aiStatus" class="ai-status"></span>
           </h3>
-          <p class="panel-desc">Connect your free Gemini API key so Axiom can transform messy calendar entries into clean, properly categorized tasks.</p>
+          <p class="panel-desc">Free Gemini API key — used to organize your assignments and match them to classes.</p>
           <div id="aiKeyForm">
             <div class="row gap" style="margin-top:12px">
-              <input type="password" id="geminiKeyInput" placeholder="Paste your Gemini API key (starts with AIza...)" style="flex:1;background:rgba(10,12,16,0.5);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:2px;font-family:var(--sans);font-size:14px" />
+              <input type="password" id="geminiKeyInput" placeholder="Paste your Gemini API key (starts with AIza...)" class="text-input" style="flex:1" />
               <button class="btn-primary" id="saveKeyBtn">Save & Test</button>
             </div>
             <p class="panel-hint">
-              Don't have a key? Get one free at
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline">aistudio.google.com/apikey</a>
-              — just sign in with Google and click "Create API key".
+              No key? Get one free at
+              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="link-gold">aistudio.google.com/apikey</a>
             </p>
           </div>
           <div id="aiKeyConnected" style="display:none">
-            <p style="color:var(--ok);font-size:13px;margin-top:8px">✓ AI is connected and ready to transform your assignments.</p>
-            <button class="btn-ghost danger" id="removeKeyBtn" style="margin-top:8px">Disconnect AI</button>
+            <p class="ok-msg" style="margin-top:8px">✓ Connected and ready.</p>
+            <button class="btn-ghost danger" id="removeKeyBtn" style="margin-top:8px">Disconnect</button>
           </div>
         </div>
 
-        <!-- Calendar Feed Panel -->
-        <div class="panel">
-          <h3 class="panel-title"><span class="dot dot-blue"></span>Calendar Feeds</h3>
-          <p class="panel-desc">Paste your Veracross (or any iCal) calendar URL. On Mac Calendar, find your school calendar in the sidebar, two-finger-click → Get Info → copy the URL.</p>
-          <div class="row gap" style="margin-top:12px">
-            <input type="text" id="feedUrlInput" placeholder="https://portals.veracross.com/yourschool/subscribe/..." style="flex:2;background:rgba(10,12,16,0.5);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:2px;font-family:var(--sans);font-size:14px" />
-            <input type="text" id="feedLabelInput" placeholder="Label (e.g. School)" style="flex:1;background:rgba(10,12,16,0.5);border:1px solid var(--line);color:var(--ink);padding:10px 12px;border-radius:2px;font-family:var(--sans);font-size:14px" />
-            <button class="btn-primary" id="addFeedBtn">Add Feed</button>
+        <!-- Two Feed Cards Side-by-Side -->
+        <div class="feed-pair">
+
+          <!-- Classes feed -->
+          <div class="panel panel-soft">
+            <h3 class="panel-title"><span class="dot dot-blue"></span>Class Schedule Feed</h3>
+            <p class="panel-desc">Your weekly class meetings. Used to know <em>what classes you have</em>.</p>
+
+            <div id="classesFeedList" class="feed-list"></div>
+
+            <div id="classesFeedAdd" class="feed-add">
+              <input type="text" id="classesFeedUrl" placeholder="Class schedule iCal URL" class="text-input" />
+              <input type="text" id="classesFeedLabel" placeholder="Label (optional)" class="text-input" style="max-width:160px" />
+              <button class="btn-primary" id="addClassesFeedBtn">Add</button>
+            </div>
+            <p class="panel-hint">Sync this once to auto-create your classes. Re-sync if your schedule changes.</p>
           </div>
 
-          <div id="feedsList" style="margin-top:20px"></div>
+          <!-- Assignments feed -->
+          <div class="panel panel-soft">
+            <h3 class="panel-title"><span class="dot dot-orange"></span>Assignments Feed</h3>
+            <p class="panel-desc">Your homework, papers, tests. Each gets matched to a class automatically.</p>
+
+            <div id="assignmentsFeedList" class="feed-list"></div>
+
+            <div id="assignmentsFeedAdd" class="feed-add">
+              <input type="text" id="assignmentsFeedUrl" placeholder="Assignments iCal URL" class="text-input" />
+              <input type="text" id="assignmentsFeedLabel" placeholder="Label (optional)" class="text-input" style="max-width:160px" />
+              <button class="btn-primary" id="addAssignmentsFeedBtn">Add</button>
+            </div>
+            <p class="panel-hint">Recommended workflow: sync classes first, then assignments.</p>
+          </div>
         </div>
 
         <!-- Sync log -->
         <div id="syncLog" class="sync-log"></div>
+
+        <!-- Help -->
+        <details class="help-section">
+          <summary>How to find your Veracross calendar URLs</summary>
+          <ol class="help-ol">
+            <li>Open the <strong>Calendar</strong> app on your Mac</li>
+            <li>In the sidebar, find your school calendars</li>
+            <li>Two-finger-click on the <em>class schedule</em> calendar → Get Info → copy the URL → paste it on the left</li>
+            <li>Repeat for the <em>assignments</em> calendar → paste it on the right</li>
+            <li>Click <strong>Sync</strong> on each. Classes first, then assignments — the AI will use your classes to match assignments correctly.</li>
+          </ol>
+        </details>
       </section>
     </main>
   </div>
 
   <!-- ====== MODALS ====== -->
   <div class="modal-backdrop" id="modalBackdrop">
-    <!-- Task Modal -->
     <div class="modal" id="taskModal">
       <h3 class="modal-title" id="taskModalTitle">New Task</h3>
       <form id="taskForm" class="modal-form">
@@ -315,9 +364,7 @@
         <div class="row gap">
           <label class="flex1">
             <span>Class</span>
-            <select id="taskSubjectInput">
-              <option value="">No class</option>
-            </select>
+            <select id="taskSubjectInput"><option value="">No class</option></select>
           </label>
           <label class="flex1">
             <span>Type</span>
@@ -354,7 +401,6 @@
       </form>
     </div>
 
-    <!-- Reminder Modal -->
     <div class="modal" id="reminderModal">
       <h3 class="modal-title">New Reminder</h3>
       <form id="reminderForm" class="modal-form">
@@ -367,14 +413,13 @@
       </form>
     </div>
 
-    <!-- Subject Modal -->
     <div class="modal" id="subjectModal">
       <h3 class="modal-title" id="subjectModalTitle">Add Class</h3>
       <form id="subjectForm" class="modal-form">
-        <label><span>Class name</span><input type="text" id="subjectNameInput" required placeholder="e.g. Algebra, ECON 301, English Period 3" /></label>
+        <label><span>Class name</span><input type="text" id="subjectNameInput" required placeholder="e.g. Algebra II, English Period 3" /></label>
         <div class="row gap">
-          <label class="flex1"><span>Teacher (optional)</span><input type="text" id="subjectTeacherInput" placeholder="e.g. Mr. Smith, Prof. Lee" /></label>
-          <label class="flex1"><span>Room (optional)</span><input type="text" id="subjectRoomInput" placeholder="e.g. 204, Online" /></label>
+          <label class="flex1"><span>Teacher (optional)</span><input type="text" id="subjectTeacherInput" placeholder="e.g. Mr. Smith" /></label>
+          <label class="flex1"><span>Room (optional)</span><input type="text" id="subjectRoomInput" placeholder="e.g. 204" /></label>
         </div>
         <label>
           <span>Color</span>
