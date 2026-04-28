@@ -51,6 +51,11 @@ const api = {
   settings: () => api.req('/api/settings'),
   updateSettings: (patch) => api.req('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
   clearTasks: (payload) => api.req('/api/settings/clear-tasks', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // Stats + favorites
+  todayStats: () => api.req('/api/stats/today'),
+  getFavorites: () => api.req('/api/logos/favorites'),
+  toggleFavorite: (logo_idx) => api.req('/api/logos/favorites', { method: 'POST', body: JSON.stringify({ logo_idx }) }),
 };
 
 // App state
@@ -245,42 +250,313 @@ const SUBJECT_COLORS = [
 ];
 
 // ==========================================================
-// LOGO ROTATION — random by default, or pinned via settings
+// LIVE ACTIVITY — progress ring, animated counter, best day
 // ==========================================================
-function setLogo(idx) {
-  if (idx === undefined || idx === null || idx < 0 || idx > 41) {
-    idx = Math.floor(Math.random() * 42);
+const activityState = {
+  lastCount: 0,
+  lastBest: 0,
+  hasCelebratedToday: false,
+};
+
+async function refreshStats(initial = false) {
+  let stats;
+  try {
+    stats = await api.todayStats();
+  } catch (e) { return; }
+
+  const { completed_today, due_today, best_day_count } = stats;
+
+  // Sidebar mini widget
+  const sidebarRing = document.getElementById('activityRingFg');
+  const sidebarCount = document.getElementById('activityCount');
+  const sidebarDenom = document.getElementById('activityDenom');
+  const sidebarBest = document.getElementById('activityBest');
+
+  if (sidebarCount) sidebarCount.textContent = completed_today;
+  if (sidebarDenom) sidebarDenom.textContent = '/' + Math.max(due_today, completed_today);
+  if (sidebarBest) sidebarBest.textContent = `Best: ${best_day_count}`;
+
+  if (sidebarRing) {
+    const total = Math.max(due_today, completed_today, 1);
+    const pct = Math.min(completed_today / total, 1);
+    const circumference = 163.36; // 2π × 26
+    sidebarRing.style.strokeDashoffset = circumference * (1 - pct);
   }
-  state.currentLogoIdx = idx;
+
+  // Today hero ring (only if Today view is active)
+  const heroFg = document.getElementById('progressHeroFg');
+  const heroCount = document.getElementById('progressHeroCount');
+  const heroDenom = document.getElementById('progressHeroDenom');
+  const heroBest = document.getElementById('progressHeroBest');
+  const heroPercent = document.getElementById('progressHeroPercent');
+  const heroLabel = document.getElementById('progressHeroLabel');
+  const heroEl = document.getElementById('progressHero');
+
+  if (heroFg) {
+    const total = Math.max(due_today, completed_today, 1);
+    const pct = Math.min(completed_today / total, 1);
+    const circumference = 326.73; // 2π × 52
+    heroFg.style.strokeDashoffset = circumference * (1 - pct);
+  }
+  if (heroBest) heroBest.textContent = best_day_count;
+  if (heroPercent) {
+    const total = Math.max(due_today, completed_today, 1);
+    const pct = Math.round((completed_today / total) * 100);
+    heroPercent.textContent = pct + '%';
+  }
+  if (heroDenom) heroDenom.textContent = Math.max(due_today, completed_today);
+  if (heroLabel) {
+    if (completed_today === 0 && due_today === 0) {
+      heroLabel.textContent = 'Nothing due today — go for any extra credit?';
+    } else if (completed_today >= due_today && due_today > 0) {
+      heroLabel.textContent = 'All done — well played.';
+    } else if (completed_today === 0 && due_today > 0) {
+      heroLabel.textContent = 'tasks due today';
+    } else {
+      heroLabel.textContent = 'tasks done today';
+    }
+  }
+
+  // Animated count-up if it changed
+  if (heroCount) {
+    const old = parseInt(heroCount.textContent) || 0;
+    if (old !== completed_today) {
+      animateCount(heroCount, old, completed_today);
+      // Bump animation
+      heroCount.classList.remove('bumped');
+      void heroCount.offsetWidth; // restart animation
+      heroCount.classList.add('bumped');
+      setTimeout(() => heroCount.classList.remove('bumped'), 500);
+    } else if (initial) {
+      heroCount.textContent = completed_today;
+    }
+  }
+
+  // Celebration when crossing the all-done line OR setting a new best
+  if (!initial && heroEl) {
+    const justCleared = activityState.lastCount < due_today && completed_today >= due_today && due_today > 0;
+    const newBest = completed_today > activityState.lastBest && completed_today === best_day_count && completed_today > 1;
+    if (justCleared && !activityState.hasCelebratedToday) {
+      heroEl.classList.add('celebrating');
+      setTimeout(() => heroEl.classList.remove('celebrating'), 2500);
+      activityState.hasCelebratedToday = true;
+      showToast('All done!', 'You finished everything due today. ✨');
+    }
+    if (newBest) {
+      heroEl.classList.add('new-best');
+      setTimeout(() => heroEl.classList.remove('new-best'), 2200);
+      showToast('New best day!', `${completed_today} tasks completed — your record.`);
+    }
+  }
+
+  activityState.lastCount = completed_today;
+  activityState.lastBest = best_day_count;
+}
+
+function animateCount(el, from, to) {
+  const duration = 600;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const value = Math.round(from + (to - from) * eased);
+    el.textContent = value;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ==========================================================
+// LOGO SYSTEM v2 — flip animation, favorites, in-place pin
+// ==========================================================
+const logoState = {
+  current: 0,           // currently displayed logo idx
+  flipDirection: 1,     // toggles each flip
+  favorites: [],        // array of favorited indices
+  pinned: null,         // pinned idx (null = random)
+  rotateFavoritesOnly: false,
+  isFlipping: false,
+};
+
+// Pick the next logo respecting pinned/favorites preferences
+function pickNextLogo() {
+  if (logoState.pinned !== null) return logoState.pinned;
+  // If user wants favorites-only and has some, pick from those
+  if (logoState.rotateFavoritesOnly && logoState.favorites.length > 0) {
+    const others = logoState.favorites.filter(i => i !== logoState.current);
+    const pool = others.length > 0 ? others : logoState.favorites;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  // Otherwise random across all 42 (avoid same-as-current if possible)
+  let next = Math.floor(Math.random() * 42);
+  if (next === logoState.current && Math.random() > 0.05) {
+    next = (next + 1 + Math.floor(Math.random() * 41)) % 42;
+  }
+  return next;
+}
+
+// Set logo without animation (initial paint)
+function setLogoInstant(idx) {
+  if (idx === undefined || idx === null || idx < 0 || idx > 41) idx = pickNextLogo();
+  logoState.current = idx;
   const src = `/logos/${idx}.png`;
-  const fav = `/logos/${idx}-fav.png`;
-  ['brandLogoMain', 'brandLogoAuth', 'logoCurrentImg'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.src = src;
-  });
-  const favicon = document.getElementById('favicon');
-  if (favicon) favicon.href = fav;
-  // Highlight in gallery if visible
+  // Both faces show the same on first paint
+  const front = document.getElementById('brandLogoMain');
+  const back = document.getElementById('brandLogoBack');
+  if (front) front.src = src;
+  if (back) back.src = src;
+  // Auth screen logo
+  const auth = document.getElementById('brandLogoAuth');
+  if (auth) auth.src = src;
+  // Settings preview
+  const cur = document.getElementById('logoCurrentImg');
+  if (cur) cur.src = src;
+  updateFaviconNoCache(idx);
+  updateLogoFabs();
+}
+
+// Animate to a new logo with a 3D cube flip
+function flipToLogo(idx) {
+  if (logoState.isFlipping) return;
+  if (idx === undefined || idx === null) idx = pickNextLogo();
+  if (idx === logoState.current) return;
+
+  logoState.isFlipping = true;
+  const flipper = document.getElementById('logoFlipper');
+  const stage = document.getElementById('logoStage');
+  if (!flipper) {
+    setLogoInstant(idx);
+    logoState.isFlipping = false;
+    return;
+  }
+
+  const front = document.getElementById('brandLogoMain');
+  const back = document.getElementById('brandLogoBack');
+  const newSrc = `/logos/${idx}.png`;
+
+  // Whichever face is currently HIDDEN gets the new image; we then flip TO it
+  const isCurrentlyFlipped = flipper.classList.contains('flipped');
+  if (isCurrentlyFlipped) {
+    // back face is showing → put new image on front, then unflip
+    front.src = newSrc;
+  } else {
+    // front face is showing → put new image on back, then flip
+    back.src = newSrc;
+  }
+
+  // Glow burst effect
+  stage.classList.add('glow-burst');
+
+  // Trigger flip
+  flipper.classList.toggle('flipped');
+
+  setTimeout(() => {
+    stage.classList.remove('glow-burst');
+    logoState.isFlipping = false;
+  }, 700);
+
+  // Update state immediately so next click can chain
+  logoState.current = idx;
+
+  // Update peripheral spots (auth + settings preview)
+  const auth = document.getElementById('brandLogoAuth');
+  if (auth) auth.src = newSrc;
+  const cur = document.getElementById('logoCurrentImg');
+  if (cur) cur.src = newSrc;
+  updateFaviconNoCache(idx);
+  updateLogoFabs();
+
+  // Update gallery selection if open
   document.querySelectorAll('#logoGallery img').forEach(img => {
     img.classList.toggle('active', +img.dataset.idx === idx);
   });
 }
 
-function applyLogoFromSettings() {
-  const pinned = state.settings?.pinned_logo;
-  if (pinned !== null && pinned !== undefined) {
-    setLogo(pinned);
-  } else {
-    setLogo(); // random
-  }
+// Force-refresh favicon by appending a cache-buster query string
+function updateFaviconNoCache(idx) {
+  const fav = document.getElementById('favicon');
+  if (!fav) return;
+  fav.href = `/logos/${idx}-fav.png?v=${Date.now()}`;
 }
 
-// Re-roll button on sidebar
-document.addEventListener('click', (e) => {
-  if (e.target.closest('#brandLogoBtn')) {
-    setLogo(); // pick new random
+// Show pin/favorite state on the toolbar buttons
+function updateLogoFabs() {
+  const favBtn = document.getElementById('logoFavBtn');
+  const pinBtn = document.getElementById('logoPinBtn');
+  if (!favBtn || !pinBtn) return;
+  const isFav = logoState.favorites.includes(logoState.current);
+  const isPinned = logoState.pinned === logoState.current;
+  favBtn.classList.toggle('active', isFav);
+  favBtn.title = isFav ? 'Unfavorite' : 'Favorite';
+  pinBtn.classList.toggle('active', isPinned);
+  pinBtn.title = isPinned ? 'Unpin (back to rotation)' : 'Pin this one';
+}
+
+// Tap stage → flip to new random
+document.addEventListener('DOMContentLoaded', () => {
+  const stage = document.getElementById('logoStage');
+  if (stage) {
+    // Click on stage (but not on fabs) re-rolls
+    stage.addEventListener('click', (e) => {
+      if (e.target.closest('.logo-fab')) return;
+      flipToLogo(pickNextLogo());
+    });
+  }
+
+  // Favorite button
+  const favBtn = document.getElementById('logoFavBtn');
+  if (favBtn) {
+    favBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const r = await api.toggleFavorite(logoState.current);
+        if (r.favorited) {
+          if (!logoState.favorites.includes(logoState.current)) logoState.favorites.push(logoState.current);
+          favBtn.classList.add('active');
+          favBtn.querySelector('svg').style.animation = 'none';
+          setTimeout(() => favBtn.querySelector('svg').style.animation = '', 10);
+        } else {
+          logoState.favorites = logoState.favorites.filter(i => i !== logoState.current);
+          favBtn.classList.remove('active');
+        }
+        updateLogoFabs();
+        renderLogoFavoriteSlots();
+      } catch (err) {
+        showToast('Couldn\'t save', err.message);
+      }
+    });
+  }
+
+  // Pin button
+  const pinBtn = document.getElementById('logoPinBtn');
+  if (pinBtn) {
+    pinBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        if (logoState.pinned === logoState.current) {
+          await api.updateSettings({ pinned_logo: null });
+          logoState.pinned = null;
+          if (state.settings) state.settings.pinned_logo = null;
+        } else {
+          await api.updateSettings({ pinned_logo: logoState.current });
+          logoState.pinned = logoState.current;
+          if (state.settings) state.settings.pinned_logo = logoState.current;
+        }
+        pinBtn.classList.add('pulse');
+        setTimeout(() => pinBtn.classList.remove('pulse'), 500);
+        updateLogoFabs();
+        renderLogoSettings();
+      } catch (err) {
+        showToast('Couldn\'t save', err.message);
+      }
+    });
   }
 });
+
+// Backwards-compat shim — keep old calls working
+function setLogo(idx) {
+  setLogoInstant(idx);
+}
 
 // ==========================================================
 // BACKGROUND PARTICLES
@@ -382,16 +658,33 @@ async function enterApp() {
     state.settings = null;
   }
   applyAccentColor();
-  applyLogoFromSettings();
   applyTodayPanelVisibility();
+
+  // Load logo state (favorites + pinned + rotation pref)
+  try {
+    const fav = await api.getFavorites();
+    logoState.favorites = fav.favorites || [];
+  } catch { logoState.favorites = []; }
+  logoState.pinned = state.settings?.pinned_logo ?? null;
+  logoState.rotateFavoritesOnly = !!state.settings?.rotate_favorites_only;
+
+  // Apply initial logo (pinned, or random from favorites/all)
+  if (logoState.pinned !== null) {
+    setLogoInstant(logoState.pinned);
+  } else {
+    setLogoInstant(pickNextLogo());
+  }
 
   document.getElementById('userName').textContent = state.settings?.display_name || user.username;
   showScreen('appScreen');
   await Promise.all([loadSubjects(), loadTasks(), loadNotes(), loadReminders()]);
   populateSubjectSelects();
+  await refreshStats(true);
   renderAll();
   checkDueReminders();
   setInterval(checkDueReminders, 30000);
+  // Refresh stats every minute
+  setInterval(() => refreshStats(false), 60000);
 }
 
 // Apply accent color globally (overrides --gold dynamically)
@@ -647,6 +940,7 @@ function attachTaskHandlers(container) {
       const updated = await api.updateTask(id, { completed: !task.completed });
       Object.assign(task, updated.task);
       renderAll();
+      refreshStats(false); // animate ring/counter immediately
     });
     const delBtn = el.querySelector('[data-act="delete"]');
     if (delBtn) {
@@ -691,6 +985,8 @@ document.getElementById('quickTaskBtn').addEventListener('click', () => openTask
 
 function openTaskModal(task = null) {
   state.editingTaskId = task ? task.id : null;
+  state.taskUserPickedSubject = !!task?.subject_id; // user already chose, don't overwrite
+  state.taskUserPickedType = !!task?.type && task.type !== 'assignment';
   document.getElementById('taskModalTitle').textContent = task ? 'Edit Task' : 'New Task';
   document.getElementById('taskTitleInput').value = task ? task.title : '';
   document.getElementById('taskDescInput').value = task ? (task.description || '') : '';
@@ -699,8 +995,68 @@ function openTaskModal(task = null) {
   document.getElementById('taskPriorityInput').value = task ? task.priority : 'medium';
   document.getElementById('taskSubjectInput').value = task && task.subject_id ? task.subject_id : '';
   document.getElementById('taskTypeInput').value = task && task.type ? task.type : 'assignment';
+  // Reset autosuggest hint
+  const hint = document.getElementById('autoSuggestHint');
+  if (hint) hint.style.display = 'none';
   openModal('taskModal');
 }
+
+// Auto-suggest class as user types task title (and auto-detect type from keywords)
+document.getElementById('taskTitleInput').addEventListener('input', (e) => {
+  const title = e.target.value.trim();
+  const hintEl = document.getElementById('autoSuggestHint');
+  if (!title || title.length < 2) {
+    if (hintEl) hintEl.style.display = 'none';
+    return;
+  }
+
+  // Subject auto-pick (only if user hasn't manually chosen one yet)
+  if (!state.taskUserPickedSubject) {
+    const match = suggestSubject(title, state.subjects);
+    const select = document.getElementById('taskSubjectInput');
+    if (match) {
+      select.value = match.subject.id;
+      if (hintEl) {
+        hintEl.style.display = '';
+        hintEl.innerHTML = `<span style="color:var(--gold)">✦</span> Linked to <strong>${escapeHtml(match.subject.name)}</strong> · <span class="link-gold" id="autoSuggestUndo" style="cursor:pointer">change</span>`;
+        document.getElementById('autoSuggestUndo').addEventListener('click', () => {
+          select.value = '';
+          state.taskUserPickedSubject = true;
+          hintEl.style.display = 'none';
+        }, { once: true });
+      }
+    } else if (select.value) {
+      // Clear if no match and user hadn't manually set it
+      select.value = '';
+      if (hintEl) hintEl.style.display = 'none';
+    }
+  }
+
+  // Type auto-pick — detect test/quiz/essay/etc keywords
+  if (!state.taskUserPickedType) {
+    const t = title.toLowerCase();
+    const typeSelect = document.getElementById('taskTypeInput');
+    let detected = null;
+    if (/\b(test|exam|midterm|final)\b/.test(t)) detected = 'exam';
+    else if (/\bquiz\b/.test(t)) detected = 'quiz';
+    else if (/\b(essay|paper|report)\b/.test(t)) detected = 'essay';
+    else if (/\bproject\b/.test(t)) detected = 'project';
+    else if (/\blab\b/.test(t)) detected = 'lab';
+    else if (/\b(read|reading|chapter|ch\.)\b/.test(t)) detected = 'reading';
+    else if (/\b(study|review)\b/.test(t)) detected = 'study';
+    if (detected) typeSelect.value = detected;
+  }
+});
+
+// Track when user manually changes the subject/type — stop auto-overriding it
+document.getElementById('taskSubjectInput').addEventListener('change', () => {
+  state.taskUserPickedSubject = true;
+  const hint = document.getElementById('autoSuggestHint');
+  if (hint) hint.style.display = 'none';
+});
+document.getElementById('taskTypeInput').addEventListener('change', () => {
+  state.taskUserPickedType = true;
+});
 
 document.getElementById('taskForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1466,21 +1822,34 @@ async function renderSettingsView() {
 }
 
 function renderLogoSettings() {
-  const s = state.settings || {};
-  const pinned = s.pinned_logo;
-  const isPinned = pinned !== null && pinned !== undefined;
+  const isPinned = logoState.pinned !== null;
+  const cur = logoState.current;
 
-  document.getElementById('logoCurrentImg').src = `/logos/${state.currentLogoIdx}.png`;
-  document.getElementById('logoMode').textContent = isPinned
-    ? `Pinned — using cube #${pinned + 1} every time.`
-    : 'Random — a different cube each open.';
+  const previewImg = document.getElementById('logoCurrentImg');
+  if (previewImg) previewImg.src = `/logos/${cur}.png`;
 
-  document.getElementById('pinLogoBtn').style.display = isPinned ? 'none' : '';
-  document.getElementById('unpinLogoBtn').style.display = isPinned ? '' : 'none';
+  const modeEl = document.getElementById('logoMode');
+  if (modeEl) {
+    if (isPinned) {
+      modeEl.textContent = `Pinned — cube #${cur + 1} every time you open Axiom.`;
+    } else if (logoState.rotateFavoritesOnly && logoState.favorites.length > 0) {
+      modeEl.textContent = `Rotating through your ${logoState.favorites.length} favorite${logoState.favorites.length === 1 ? '' : 's'}.`;
+    } else {
+      modeEl.textContent = 'Random — a different cube each open.';
+    }
+  }
 
-  // Build gallery (lazy: only build once)
+  const pinBtn = document.getElementById('pinLogoBtn');
+  const unpinBtn = document.getElementById('unpinLogoBtn');
+  if (pinBtn) pinBtn.style.display = isPinned ? 'none' : '';
+  if (unpinBtn) unpinBtn.style.display = isPinned ? '' : 'none';
+
+  // Render favorite slots (5 slots, shows favorites + plus boxes for empty)
+  renderLogoFavoriteSlots();
+
+  // Build gallery once
   const gallery = document.getElementById('logoGallery');
-  if (!gallery.dataset.built) {
+  if (gallery && !gallery.dataset.built) {
     let html = '';
     for (let i = 0; i < 42; i++) {
       html += `<img src="/logos/${i}.png" data-idx="${i}" alt="" />`;
@@ -1490,38 +1859,62 @@ function renderLogoSettings() {
     gallery.querySelectorAll('img').forEach(img => {
       img.addEventListener('click', async () => {
         const idx = +img.dataset.idx;
-        setLogo(idx);
+        flipToLogo(idx);
+        // Pin to this one
         try {
           await api.updateSettings({ pinned_logo: idx });
-          state.settings.pinned_logo = idx;
+          logoState.pinned = idx;
+          if (state.settings) state.settings.pinned_logo = idx;
           renderLogoSettings();
         } catch (err) { alert(err.message); }
       });
     });
   }
-  // Update active highlight in gallery
-  gallery.querySelectorAll('img').forEach(img => {
-    img.classList.toggle('active', +img.dataset.idx === state.currentLogoIdx);
+  if (gallery) {
+    gallery.querySelectorAll('img').forEach(img => {
+      img.classList.toggle('active', +img.dataset.idx === logoState.current);
+    });
+  }
+
+  // Rotation mode toggle
+  const rotToggle = document.getElementById('rotateFavoritesToggle');
+  if (rotToggle) rotToggle.checked = !!logoState.rotateFavoritesOnly;
+}
+
+function renderLogoFavoriteSlots() {
+  const wrap = document.getElementById('logoFavoritesRow');
+  if (!wrap) return;
+  let html = '';
+  // Up to 5 slots — fav slots first, then empty slots
+  for (let i = 0; i < 5; i++) {
+    if (i < logoState.favorites.length) {
+      const idx = logoState.favorites[i];
+      html += `<div class="logo-favorite-slot" data-fav="${idx}" title="Click to use, ✕ to remove">
+        <img src="/logos/${idx}.png" alt="" />
+      </div>`;
+    } else {
+      html += `<div class="logo-favorite-slot empty"></div>`;
+    }
+  }
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.logo-favorite-slot[data-fav]').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = +el.dataset.fav;
+      flipToLogo(idx);
+    });
   });
 }
 
 document.getElementById('rerollLogoBtn').addEventListener('click', () => {
-  setLogo(); // new random
-  // If currently pinned, keep pinned mode but on new id; if random, just preview new
-  if (state.settings && state.settings.pinned_logo !== null && state.settings.pinned_logo !== undefined) {
-    api.updateSettings({ pinned_logo: state.currentLogoIdx }).then(() => {
-      state.settings.pinned_logo = state.currentLogoIdx;
-      renderLogoSettings();
-    });
-  } else {
-    renderLogoSettings();
-  }
+  flipToLogo(pickNextLogo());
 });
 
 document.getElementById('pinLogoBtn').addEventListener('click', async () => {
   try {
-    await api.updateSettings({ pinned_logo: state.currentLogoIdx });
-    state.settings.pinned_logo = state.currentLogoIdx;
+    await api.updateSettings({ pinned_logo: logoState.current });
+    logoState.pinned = logoState.current;
+    if (state.settings) state.settings.pinned_logo = logoState.current;
+    updateLogoFabs();
     renderLogoSettings();
   } catch (err) { alert(err.message); }
 });
@@ -1529,8 +1922,9 @@ document.getElementById('pinLogoBtn').addEventListener('click', async () => {
 document.getElementById('unpinLogoBtn').addEventListener('click', async () => {
   try {
     await api.updateSettings({ pinned_logo: null });
-    state.settings.pinned_logo = null;
-    setLogo(); // new random
+    logoState.pinned = null;
+    if (state.settings) state.settings.pinned_logo = null;
+    flipToLogo(pickNextLogo());
     renderLogoSettings();
   } catch (err) { alert(err.message); }
 });
@@ -1538,6 +1932,20 @@ document.getElementById('unpinLogoBtn').addEventListener('click', async () => {
 document.getElementById('browseLogoBtn').addEventListener('click', () => {
   const gallery = document.getElementById('logoGallery');
   gallery.style.display = gallery.style.display === 'none' ? '' : 'none';
+});
+
+// Rotate-favorites-only toggle
+document.getElementById('rotateFavoritesToggle').addEventListener('change', async (e) => {
+  const checked = e.target.checked;
+  try {
+    await api.updateSettings({ rotate_favorites_only: checked });
+    logoState.rotateFavoritesOnly = checked;
+    if (state.settings) state.settings.rotate_favorites_only = checked;
+    renderLogoSettings();
+  } catch (err) {
+    alert(err.message);
+    e.target.checked = !checked;
+  }
 });
 
 // Profile field saves (debounced)
@@ -1735,6 +2143,88 @@ function renderAll() {
 }
 
 // ==========================================================
+// AUTO-CLASS MATCHER — guesses which class a task belongs to
+// based on its title. Runs locally, no AI required.
+//
+// Tries strategies in order, returns highest-confidence match:
+//   1. Exact class name appears in title
+//   2. Subject name (math/english/etc) maps to a known class
+//   3. Course code prefix (ENG10:, MATH-) maps to a class
+//   4. Teacher name in title matches a class teacher
+// ==========================================================
+
+// Common subject words that suggest a class type. Each maps to keywords
+// to scan in your class list.
+const SUBJECT_HINTS = {
+  math:    ['math', 'algebra', 'calculus', 'geometry', 'trig', 'statistics', 'precalc', 'calc'],
+  english: ['english', 'lit', 'literature', 'writing', 'composition', 'reading', 'poetry'],
+  science: ['science', 'biology', 'bio', 'chemistry', 'chem', 'physics', 'anatomy', 'environmental'],
+  history: ['history', 'social studies', 'civics', 'government', 'econ', 'economics', 'geography', 'world'],
+  language:['spanish', 'french', 'latin', 'german', 'mandarin', 'chinese', 'japanese', 'arabic'],
+  art:     ['art', 'drawing', 'painting', 'studio', 'design'],
+  music:   ['music', 'band', 'orchestra', 'choir', 'chorus', 'piano'],
+  pe:      ['gym', 'pe', 'physical education', 'fitness', 'health'],
+  cs:      ['computer', 'cs', 'coding', 'programming', 'software'],
+};
+
+function suggestSubject(title, subjects) {
+  if (!title || !subjects || subjects.length === 0) return null;
+  const t = title.toLowerCase();
+
+  // Strategy 1: exact class name appears in title
+  // Sort by length desc so "English 10" matches before "English"
+  const sortedSubjects = [...subjects].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+  for (const s of sortedSubjects) {
+    if (!s.name) continue;
+    const name = s.name.toLowerCase();
+    // Use word boundary for short names to avoid false positives
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\b${escaped}\\b`, 'i');
+    if (re.test(t)) return { subject: s, confidence: 'high', strategy: 'name' };
+  }
+
+  // Strategy 2: course code prefix
+  // e.g. "ENG10: Read Ch 4" or "MATH-H quiz"
+  const prefixMatch = t.match(/^([a-z]{2,5})[\s\-:]?(\d{0,3})/i);
+  if (prefixMatch) {
+    const prefix = prefixMatch[0].toLowerCase().replace(/[\s\-:]/g, '');
+    for (const s of subjects) {
+      const sName = s.name.toLowerCase().replace(/[\s\-:]/g, '');
+      if (sName.includes(prefix) || prefix.includes(sName.slice(0, 4))) {
+        return { subject: s, confidence: 'medium', strategy: 'prefix' };
+      }
+    }
+  }
+
+  // Strategy 3: subject keyword match (math → Algebra, science → Bio, etc.)
+  for (const [category, words] of Object.entries(SUBJECT_HINTS)) {
+    for (const word of words) {
+      if (new RegExp(`\\b${word}\\b`, 'i').test(t)) {
+        // Try to find a class whose name also matches this category
+        for (const s of subjects) {
+          const sLower = s.name.toLowerCase();
+          for (const w of words) {
+            if (sLower.includes(w)) return { subject: s, confidence: 'medium', strategy: 'keyword' };
+          }
+        }
+      }
+    }
+  }
+
+  // Strategy 4: teacher name in title matches a class teacher
+  for (const s of subjects) {
+    if (s.teacher) {
+      const teacherLast = s.teacher.split(/\s+/).pop().toLowerCase();
+      if (teacherLast.length >= 3 && t.includes(teacherLast)) {
+        return { subject: s, confidence: 'low', strategy: 'teacher' };
+      }
+    }
+  }
+
+  return null;
+}
+
+// ==========================================================
 // HELPERS
 // ==========================================================
 function escapeHtml(str) {
@@ -1765,7 +2255,7 @@ function toDateStr(y, m, d) {
 // STARTUP
 // ==========================================================
 async function init() {
-  setLogo(); // random initial; gets overridden once settings load
+  setLogoInstant(Math.floor(Math.random() * 42)); // initial paint before settings load
   spawnParticles();
   try {
     await enterApp();

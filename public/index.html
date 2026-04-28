@@ -74,9 +74,18 @@
     <aside class="sidebar">
       <div class="sidebar-top">
         <div class="brand">
-          <button class="brand-logo-btn" id="brandLogoBtn" title="Tap for a different logo">
-            <img class="brand-logo" id="brandLogoMain" alt="" />
-          </button>
+          <div class="logo-stage" id="logoStage">
+            <div class="logo-flipper" id="logoFlipper">
+              <img class="logo-face logo-face-front" id="brandLogoMain" alt="" />
+              <img class="logo-face logo-face-back" id="brandLogoBack" alt="" />
+            </div>
+            <button class="logo-fab logo-fab-fav" id="logoFavBtn" title="Favorite" aria-label="Favorite">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </button>
+            <button class="logo-fab logo-fab-pin" id="logoPinBtn" title="Pin / unpin" aria-label="Pin">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L9 7H4l4 4-2 7 6-4 6 4-2-7 4-4h-5z"/></svg>
+            </button>
+          </div>
           <div class="brand-name">Axiom</div>
         </div>
       </div>
@@ -117,6 +126,24 @@
       </nav>
 
       <div class="sidebar-bottom">
+        <!-- Live activity widget — daily progress -->
+        <div class="activity-widget" id="activityWidget">
+          <div class="activity-ring-wrap">
+            <svg class="activity-ring" viewBox="0 0 60 60">
+              <circle class="activity-ring-bg" cx="30" cy="30" r="26"/>
+              <circle class="activity-ring-fg" id="activityRingFg" cx="30" cy="30" r="26"/>
+            </svg>
+            <div class="activity-ring-text">
+              <div class="activity-count" id="activityCount">0</div>
+              <div class="activity-denom" id="activityDenom">/0</div>
+            </div>
+          </div>
+          <div class="activity-meta">
+            <div class="activity-label">Today</div>
+            <div class="activity-best" id="activityBest">Best: 0</div>
+          </div>
+        </div>
+
         <div class="user-row">
           <div class="user-name" id="userName">—</div>
           <button class="icon-btn" id="logoutBtn" title="Sign out">
@@ -150,6 +177,32 @@
           <div class="focus-eyebrow" id="focusEyebrow">Right now</div>
           <div class="focus-headline" id="focusHeadline">—</div>
           <div class="focus-tasks" id="focusTasks"></div>
+        </div>
+
+        <!-- Live progress hero — animates as you complete tasks -->
+        <div class="progress-hero" id="progressHero">
+          <svg class="progress-hero-ring" viewBox="0 0 120 120">
+            <circle class="progress-hero-bg" cx="60" cy="60" r="52"/>
+            <circle class="progress-hero-fg" id="progressHeroFg" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="progress-hero-text">
+            <div class="progress-hero-count">
+              <span id="progressHeroCount">0</span>
+              <span class="progress-hero-of">of</span>
+              <span id="progressHeroDenom">0</span>
+            </div>
+            <div class="progress-hero-label" id="progressHeroLabel">tasks done today</div>
+          </div>
+          <div class="progress-hero-meta">
+            <div class="progress-hero-stat">
+              <div class="progress-hero-stat-num" id="progressHeroBest">0</div>
+              <div class="progress-hero-stat-label">Best day</div>
+            </div>
+            <div class="progress-hero-stat">
+              <div class="progress-hero-stat-num" id="progressHeroPercent">0%</div>
+              <div class="progress-hero-stat-label">Today's progress</div>
+            </div>
+          </div>
         </div>
 
         <!-- Compact secondary panels -->
@@ -406,6 +459,18 @@
                 </div>
               </div>
             </div>
+            <div style="margin-top:16px">
+              <div class="setting-label" style="margin-bottom:6px">Your favorites <span style="color:var(--ink-faint);text-transform:none;letter-spacing:0;font-style:italic;font-family:var(--serif-body)">— up to 5</span></div>
+              <div id="logoFavoritesRow" class="logo-favorites-row"></div>
+              <p class="logo-favorites-hint">Hover the cube in the sidebar and click ❤ to favorite. Click any favorite here to switch to it.</p>
+              <label class="toggle-row" style="margin-top:12px">
+                <input type="checkbox" id="rotateFavoritesToggle" />
+                <div>
+                  <span class="toggle-name">Rotate only through my favorites</span>
+                  <span class="toggle-desc">Instead of all 42 cubes. Off = full rotation.</span>
+                </div>
+              </label>
+            </div>
             <div id="logoGallery" class="logo-gallery" style="display:none"></div>
           </div>
         </div>
@@ -488,6 +553,7 @@
       <h3 class="modal-title" id="taskModalTitle">New task</h3>
       <form id="taskForm" class="modal-form">
         <label><span>What is it?</span><input type="text" id="taskTitleInput" required placeholder="e.g. Read chapters 4-5, Math test" /></label>
+        <div id="autoSuggestHint" class="auto-suggest-hint" style="display:none"></div>
         <div class="row gap">
           <label class="flex1">
             <span>Class</span>

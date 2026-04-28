@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
   try {
     const r = await pool.query(`
       SELECT
-        accent_color, display_name, greeting_style, pinned_logo,
+        accent_color, display_name, greeting_style, pinned_logo, rotate_favorites_only,
         show_overdue, show_exams, show_today, show_week, show_reminders_today,
         ai_enabled, gemini_api_key IS NOT NULL AS has_gemini_key
       FROM user_settings WHERE user_id = $1
@@ -24,6 +24,7 @@ router.get('/', async (req, res) => {
         display_name: null,
         greeting_style: 'warm',
         pinned_logo: null,
+        rotate_favorites_only: false,
         show_overdue: true,
         show_exams: true,
         show_today: true,
@@ -44,6 +45,7 @@ router.get('/', async (req, res) => {
 router.patch('/', async (req, res) => {
   const allowed = [
     'accent_color', 'display_name', 'greeting_style', 'pinned_logo',
+    'rotate_favorites_only',
     'show_overdue', 'show_exams', 'show_today', 'show_week', 'show_reminders_today'
   ];
 
@@ -69,7 +71,7 @@ router.patch('/', async (req, res) => {
     }
     updates.pinned_logo = n;
   }
-  for (const k of ['show_overdue', 'show_exams', 'show_today', 'show_week', 'show_reminders_today']) {
+  for (const k of ['show_overdue', 'show_exams', 'show_today', 'show_week', 'show_reminders_today', 'rotate_favorites_only']) {
     if (updates[k] !== undefined) updates[k] = !!updates[k];
   }
 

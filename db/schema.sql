@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS user_settings (
   display_name VARCHAR(80),
   greeting_style VARCHAR(20) DEFAULT 'warm',
   pinned_logo INT,
+  rotate_favorites_only BOOLEAN DEFAULT FALSE,
+  best_day_count INT DEFAULT 0,
+  best_day_date DATE,
   show_overdue BOOLEAN DEFAULT TRUE,
   show_exams BOOLEAN DEFAULT TRUE,
   show_today BOOLEAN DEFAULT TRUE,
@@ -95,6 +98,15 @@ CREATE TABLE IF NOT EXISTS ical_imported (
   task_id INT REFERENCES tasks(id) ON DELETE SET NULL,
   imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, ical_uid)
+);
+
+-- Per-user favorites for the logo (up to 5 saved cube indices)
+CREATE TABLE IF NOT EXISTS logo_favorites (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  logo_idx INT NOT NULL CHECK (logo_idx >= 0 AND logo_idx < 42),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, logo_idx)
 );
 
 -- =========================================================
@@ -127,6 +139,9 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_exams BOOLEAN DEFAULT TR
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_today BOOLEAN DEFAULT TRUE;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_week BOOLEAN DEFAULT TRUE;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_reminders_today BOOLEAN DEFAULT FALSE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS rotate_favorites_only BOOLEAN DEFAULT FALSE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS best_day_count INT DEFAULT 0;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS best_day_date DATE;
 
 -- =========================================================
 -- 3. INDEXES — created AFTER migrations so all columns exist
@@ -143,3 +158,4 @@ CREATE INDEX IF NOT EXISTS idx_reminders_time ON reminders(remind_at);
 CREATE INDEX IF NOT EXISTS idx_ical_feeds_user ON ical_feeds(user_id);
 CREATE INDEX IF NOT EXISTS idx_ical_imported_user ON ical_imported(user_id);
 CREATE INDEX IF NOT EXISTS idx_ical_imported_uid ON ical_imported(ical_uid);
+CREATE INDEX IF NOT EXISTS idx_logo_favorites_user ON logo_favorites(user_id);
