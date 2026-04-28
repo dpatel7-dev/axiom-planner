@@ -46,11 +46,17 @@ const api = {
   addFeed: (url, label, feed_type) => api.req('/api/import/feeds', { method: 'POST', body: JSON.stringify({ url, label, feed_type }) }),
   deleteFeed: (id) => api.req('/api/import/feeds/' + id, { method: 'DELETE' }),
   syncFeed: (id) => api.req('/api/import/feeds/' + id + '/sync', { method: 'POST', body: JSON.stringify({ daysAhead: 28 }) }),
+
+  // Settings + danger zone
+  settings: () => api.req('/api/settings'),
+  updateSettings: (patch) => api.req('/api/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+  clearTasks: (payload) => api.req('/api/settings/clear-tasks', { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 // App state
 const state = {
   user: null,
+  settings: null,
   subjects: [],
   tasks: [],
   notes: [],
@@ -65,7 +71,164 @@ const state = {
   editingTaskId: null,
   editingSubjectId: null,
   noteSaveTimer: null,
+  currentLogoIdx: 0,
 };
+
+// ==========================================================
+// HUMAN COPY — greetings, focus messages, empty states
+// Rotates so it doesn't feel mechanical.
+// ==========================================================
+const COPY = {
+  // Greetings by time of day + style. Picks one that fits the moment.
+  greeting(hour, dow, name, style) {
+    const n = name || '';
+    const s = name ? ', ' + name : '';
+    const isWeekend = dow === 0 || dow === 6;
+    const isSunday = dow === 0;
+    const isFriday = dow === 5;
+    const isMonday = dow === 1;
+    const lateNight = hour >= 22 || hour < 5;
+    const earlyMorn = hour >= 5 && hour < 8;
+    const morn = hour >= 8 && hour < 12;
+    const afternoon = hour >= 12 && hour < 17;
+    const evening = hour >= 17 && hour < 22;
+
+    if (style === 'minimal') return n || 'Welcome.';
+    if (style === 'formal') {
+      if (lateNight) return 'Welcome.';
+      if (morn || earlyMorn) return 'Good morning.';
+      if (afternoon) return 'Good afternoon.';
+      return 'Good evening.';
+    }
+    if (style === 'casual') {
+      const pool = [];
+      if (lateNight) pool.push(`Late one${s}.`, `Still up${s}?`, `Quiet hours${s}.`);
+      else if (earlyMorn) pool.push(`Up early${s}.`, `Hey${s} 👋`, `Morning${s}.`);
+      else if (morn) pool.push(`Hey${s} 👋`, `Morning${s}.`, `What's the plan${s}?`);
+      else if (afternoon) pool.push(`Afternoon${s}.`, `Hey${s}.`, `Back at it${s}?`);
+      else pool.push(`Evening${s}.`, `Hey${s}.`, `Hope today went well${s}.`);
+      if (isFriday && (afternoon || evening)) pool.push(`Friday${s} — almost there.`, `TGIF${s}.`);
+      if (isSunday) pool.push(`Sunday sloth mode${s}.`, `Slow Sunday${s}.`);
+      if (isMonday && morn) pool.push(`Fresh week${s}.`, `Monday${s}. Let's go.`);
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+    // 'warm' (default)
+    const pool = [];
+    if (lateNight) pool.push(`Late evening${s}.`, `Up late${s}?`, `It's quiet${s}.`);
+    else if (earlyMorn) pool.push(`Early morning${s}.`, `Good morning${s}.`);
+    else if (morn) pool.push(`Good morning${s}.`, `Morning${s}.`);
+    else if (afternoon) pool.push(`Good afternoon${s}.`, `Afternoon${s}.`);
+    else pool.push(`Good evening${s}.`, `Evening${s}.`);
+    if (isWeekend && (morn || afternoon)) pool.push(`Easy ${isSunday ? 'Sunday' : 'Saturday'}${s}.`);
+    if (isFriday && evening) pool.push(`Friday evening${s}. Well earned.`);
+    return pool[Math.floor(Math.random() * pool.length)];
+  },
+
+  // The view-sub line right under the greeting.
+  todaySub(counts) {
+    const { overdue, today, week, exams } = counts;
+    const total = overdue + today + week;
+    if (total === 0 && exams === 0) {
+      return [
+        'A blank slate. Make of it what you will.',
+        'Nothing on the books. Nice.',
+        'You\'re caught up. Take a breath.',
+        'All clear. Maybe a walk?',
+        'Empty plate, full mind. Use the time.',
+      ][Math.floor(Math.random() * 5)];
+    }
+    if (overdue > 0) {
+      return `${overdue} overdue. Let's start there.`;
+    }
+    if (today > 0) {
+      return today === 1 ? 'One thing due today.' : `${today} things due today.`;
+    }
+    if (week > 0) {
+      return `Quiet today — ${week} on the way this week.`;
+    }
+    return 'Eyes ahead.';
+  },
+
+  // The big "focus" message in the hero card.
+  focus(counts, nextTask, nextExam) {
+    const { overdue, today } = counts;
+    if (overdue > 0) {
+      const t = nextTask;
+      return {
+        eyebrow: overdue === 1 ? 'One thing overdue' : `${overdue} things overdue`,
+        headline: t ? t.title : 'Catch up first.',
+      };
+    }
+    if (nextExam) {
+      const days = daysUntil(nextExam.due_date);
+      const word = nextExam.type === 'quiz' ? 'Quiz' : 'Test';
+      return {
+        eyebrow: days === 0 ? `${word} today` : days === 1 ? `${word} tomorrow` : `${word} in ${days} days`,
+        headline: nextExam.title,
+      };
+    }
+    if (today > 0) {
+      const t = nextTask;
+      return {
+        eyebrow: 'Up next',
+        headline: t ? t.title : `${today} due today`,
+      };
+    }
+    if (counts.week > 0) {
+      const t = nextTask;
+      return {
+        eyebrow: 'This week',
+        headline: t ? t.title : 'Plenty of room to plan ahead.',
+      };
+    }
+    return {
+      eyebrow: 'You\'re clear',
+      headline: 'Nothing pressing. Use the space well.',
+    };
+  },
+
+  emptyTasks() {
+    return [
+      'Nothing here yet. Add something or import a feed.',
+      'A blank canvas.',
+      'No tasks. The simplest filter result.',
+    ][Math.floor(Math.random() * 3)];
+  },
+  emptyDueToday() {
+    return [
+      'Nothing due today. Take a breath.',
+      'No deadlines today.',
+      'Today is yours.',
+    ][Math.floor(Math.random() * 3)];
+  },
+  emptyWeek() {
+    return [
+      'Nothing on the week.',
+      'A clear week ahead.',
+      'No deadlines coming up.',
+    ][Math.floor(Math.random() * 3)];
+  },
+  emptyReminders() {
+    return [
+      'No reminders coming up.',
+      'Nothing pinging soon.',
+    ][Math.floor(Math.random() * 2)];
+  },
+  emptyNotes() {
+    return 'No notes yet. Click + to start one.';
+  },
+  emptyClasses() {
+    return 'No classes yet. Add one above, or import a class schedule from the Import page.';
+  },
+};
+
+function daysUntil(dateStr) {
+  if (!dateStr) return 999;
+  const d = new Date(dateStr.slice(0, 10) + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.round((d - now) / (1000 * 60 * 60 * 24));
+}
 
 // Predefined color palette (curated to look good against the dawn background)
 const SUBJECT_COLORS = [
@@ -82,21 +245,42 @@ const SUBJECT_COLORS = [
 ];
 
 // ==========================================================
-// LOGO ROTATION — pick one of 42 randomly each pageload, set favicon too
+// LOGO ROTATION — random by default, or pinned via settings
 // ==========================================================
-function setRandomLogo() {
-  const idx = Math.floor(Math.random() * 42);
+function setLogo(idx) {
+  if (idx === undefined || idx === null || idx < 0 || idx > 41) {
+    idx = Math.floor(Math.random() * 42);
+  }
+  state.currentLogoIdx = idx;
   const src = `/logos/${idx}.png`;
   const fav = `/logos/${idx}-fav.png`;
-
-  const main = document.getElementById('brandLogoMain');
-  const auth = document.getElementById('brandLogoAuth');
-  if (main) main.src = src;
-  if (auth) auth.src = src;
-
+  ['brandLogoMain', 'brandLogoAuth', 'logoCurrentImg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.src = src;
+  });
   const favicon = document.getElementById('favicon');
   if (favicon) favicon.href = fav;
+  // Highlight in gallery if visible
+  document.querySelectorAll('#logoGallery img').forEach(img => {
+    img.classList.toggle('active', +img.dataset.idx === idx);
+  });
 }
+
+function applyLogoFromSettings() {
+  const pinned = state.settings?.pinned_logo;
+  if (pinned !== null && pinned !== undefined) {
+    setLogo(pinned);
+  } else {
+    setLogo(); // random
+  }
+}
+
+// Re-roll button on sidebar
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#brandLogoBtn')) {
+    setLogo(); // pick new random
+  }
+});
 
 // ==========================================================
 // BACKGROUND PARTICLES
@@ -191,13 +375,59 @@ function showScreen(id) {
 async function enterApp() {
   const { user } = await api.me();
   state.user = user;
-  document.getElementById('userName').textContent = user.username;
+  // Load settings before rendering anything
+  try {
+    state.settings = await api.settings();
+  } catch {
+    state.settings = null;
+  }
+  applyAccentColor();
+  applyLogoFromSettings();
+  applyTodayPanelVisibility();
+
+  document.getElementById('userName').textContent = state.settings?.display_name || user.username;
   showScreen('appScreen');
   await Promise.all([loadSubjects(), loadTasks(), loadNotes(), loadReminders()]);
   populateSubjectSelects();
   renderAll();
   checkDueReminders();
   setInterval(checkDueReminders, 30000);
+}
+
+// Apply accent color globally (overrides --gold dynamically)
+function applyAccentColor() {
+  const accent = state.settings?.accent_color || '#d4a857';
+  document.documentElement.style.setProperty('--gold', accent);
+  document.documentElement.style.setProperty('--accent', accent);
+  // Also derive a "hot" version (slightly lighter) and "deep" version
+  const hot = lightenColor(accent, 0.15);
+  document.documentElement.style.setProperty('--gold-hot', hot);
+}
+
+function applyTodayPanelVisibility() {
+  const s = state.settings || {};
+  const panels = {
+    'overduePanel': s.show_overdue !== false,
+    'examsPanel': s.show_exams !== false,
+    'todayPanel': s.show_today !== false,
+    'weekPanel': s.show_week !== false,
+    'todayRemindersPanel': !!s.show_reminders_today,
+  };
+  for (const [id, visible] of Object.entries(panels)) {
+    const el = document.getElementById(id);
+    if (el) el.dataset.userHidden = visible ? '0' : '1';
+  }
+}
+
+function lightenColor(hex, amount) {
+  // Naive lighten — push each channel toward 255 by `amount` (0..1)
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return hex;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  const lr = Math.min(255, Math.round(r + (255 - r) * amount));
+  const lg = Math.min(255, Math.round(g + (255 - g) * amount));
+  const lb = Math.min(255, Math.round(b + (255 - b) * amount));
+  return '#' + [lr, lg, lb].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
 // ==========================================================
@@ -215,6 +445,7 @@ function switchView(view) {
   if (view === 'today') renderToday();
   if (view === 'subjects') renderSubjects();
   if (view === 'import') loadImportView();
+  if (view === 'settings') renderSettingsView();
 }
 
 // ==========================================================
@@ -228,10 +459,7 @@ async function loadSubjects() {
 function renderSubjects() {
   const grid = document.getElementById('subjectsGrid');
   if (state.subjects.length === 0) {
-    grid.innerHTML = `
-      <div class="subject-card-empty">
-        No classes yet. Click "+ Add Class" to add your first one — it works for any class, period, or course you take.
-      </div>`;
+    grid.innerHTML = `<div class="subject-card-empty">${COPY.emptyClasses()}</div>`;
     return;
   }
   grid.innerHTML = state.subjects.map(s => `
@@ -378,7 +606,7 @@ function renderTasks() {
   const list = document.getElementById('tasksList');
   const tasks = filterTasks(state.tasks);
   if (tasks.length === 0) {
-    list.innerHTML = '<p class="list-empty">Nothing here. Try a different filter or add a new task.</p>';
+    list.innerHTML = `<p class="list-empty">${COPY.emptyTasks()}</p>`;
     return;
   }
   list.innerHTML = tasks.map(taskHTML).join('');
@@ -825,94 +1053,125 @@ document.getElementById('calToday').addEventListener('click', () => {
 });
 
 // ==========================================================
-// TODAY VIEW — Smart dashboard
+// TODAY VIEW — Smart dashboard with focus card + human copy
 // ==========================================================
 function renderToday() {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   document.getElementById('todayDate').textContent = dateStr;
 
-  const hour = now.getHours();
-  let greeting = 'Good evening';
-  if (hour < 12) greeting = 'Good morning';
-  else if (hour < 18) greeting = 'Good afternoon';
-  document.getElementById('todayGreeting').textContent = greeting + ', ' + (state.user.username || '') + '.';
+  // Greeting (rotates by time + style)
+  const name = state.settings?.display_name || state.user?.username || '';
+  const style = state.settings?.greeting_style || 'warm';
+  document.getElementById('todayGreeting').textContent = COPY.greeting(now.getHours(), now.getDay(), name, style);
 
   const todayStr = now.toISOString().slice(0, 10);
   const weekFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const twoWeeksOut = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  // Overdue
   const overdue = state.tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) < todayStr);
-  const overduePanel = document.getElementById('overduePanel');
-  const overdueList = document.getElementById('overdueList');
-  if (overdue.length === 0) {
-    overduePanel.style.display = 'none';
-  } else {
-    overduePanel.style.display = '';
-    overdueList.innerHTML = overdue.slice(0, 5).map(taskHTML).join('');
-    attachTaskHandlers(overdueList);
-  }
-
-  // Tests & Quizzes (next 14 days)
+  const todayTasks = state.tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) === todayStr);
+  const weekTasks = state.tasks.filter(t => !t.completed && t.due_date &&
+    t.due_date.slice(0, 10) > todayStr && t.due_date.slice(0, 10) <= weekFromNow);
   const exams = state.tasks.filter(t => !t.completed && (t.type === 'exam' || t.type === 'quiz')
     && t.due_date && t.due_date.slice(0, 10) >= todayStr && t.due_date.slice(0, 10) <= twoWeeksOut)
     .sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
-  const examsPanel = document.getElementById('examsPanel');
-  const examsList = document.getElementById('examsList');
-  if (exams.length === 0) {
-    examsPanel.style.display = 'none';
+
+  const counts = { overdue: overdue.length, today: todayTasks.length, week: weekTasks.length, exams: exams.length };
+
+  // View-sub line
+  document.getElementById('todaySub').textContent = COPY.todaySub(counts);
+
+  // Focus card — picks the most pressing thing
+  const sortByPriority = (a, b) => {
+    const order = { high: 0, medium: 1, low: 2 };
+    return (order[a.priority] || 1) - (order[b.priority] || 1);
+  };
+  const overdueSorted = [...overdue].sort(sortByPriority);
+  const todaySorted = [...todayTasks].sort(sortByPriority);
+  const nextTask = overdueSorted[0] || todaySorted[0] || weekTasks[0];
+  const nextExam = exams[0];
+  const focus = COPY.focus(counts, nextTask, nextExam);
+
+  document.getElementById('focusEyebrow').textContent = focus.eyebrow;
+  document.getElementById('focusHeadline').textContent = focus.headline;
+
+  // Inline-show up to 3 priority items in the focus card if there are overdue/today
+  const focusList = document.getElementById('focusTasks');
+  const inFocus = [...overdueSorted, ...todaySorted].slice(0, 3);
+  if (inFocus.length === 0 || (overdue.length === 0 && todayTasks.length === 0)) {
+    focusList.innerHTML = '';
   } else {
-    examsPanel.style.display = '';
-    examsList.innerHTML = exams.slice(0, 5).map(taskHTML).join('');
-    attachTaskHandlers(examsList);
+    focusList.innerHTML = inFocus.map(taskHTML).join('');
+    attachTaskHandlers(focusList);
   }
 
-  // Exam banner — show if any exam/quiz within the next 3 days
-  updateExamBanner(exams);
-
-  // Due Today
-  const todayTasks = state.tasks.filter(t => !t.completed && t.due_date && t.due_date.slice(0, 10) === todayStr);
-  const todayTasksList = document.getElementById('todayTasksList');
-  if (todayTasks.length === 0) {
-    todayTasksList.innerHTML = '<p class="list-empty">Nothing due today. Take a breath.</p>';
-  } else {
-    todayTasksList.innerHTML = todayTasks.map(taskHTML).join('');
-    attachTaskHandlers(todayTasksList);
+  // Secondary panels — respect user pref + auto-hide when empty
+  function setPanel(id, items, renderEmpty, renderItems) {
+    const panel = document.getElementById(id);
+    if (!panel) return;
+    const userHidden = panel.dataset.userHidden === '1';
+    if (userHidden) { panel.style.display = 'none'; return; }
+    if (items.length === 0 && id === 'overduePanel') {
+      panel.style.display = 'none';
+      return;
+    }
+    if (items.length === 0 && id === 'examsPanel') {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    const list = panel.querySelector('.list');
+    if (items.length === 0) {
+      list.innerHTML = `<p class="list-empty">${renderEmpty()}</p>`;
+    } else {
+      list.innerHTML = renderItems();
+      attachTaskHandlers(list);
+    }
   }
 
-  // Due This Week (excluding today and overdue)
-  const weekTasks = state.tasks.filter(t => !t.completed && t.due_date &&
-    t.due_date.slice(0, 10) > todayStr && t.due_date.slice(0, 10) <= weekFromNow);
-  const weekTasksList = document.getElementById('weekTasksList');
-  if (weekTasks.length === 0) {
-    weekTasksList.innerHTML = '<p class="list-empty">All clear for the week.</p>';
-  } else {
-    weekTasksList.innerHTML = weekTasks.slice(0, 5).map(taskHTML).join('');
-    attachTaskHandlers(weekTasksList);
-  }
+  setPanel('overduePanel', overdue,
+    () => '',
+    () => overdue.slice(0, 5).map(taskHTML).join(''));
+  setPanel('examsPanel', exams,
+    () => '',
+    () => exams.slice(0, 5).map(taskHTML).join(''));
+  setPanel('todayPanel', todayTasks,
+    () => COPY.emptyDueToday(),
+    () => todayTasks.map(taskHTML).join(''));
+  setPanel('weekPanel', weekTasks,
+    () => COPY.emptyWeek(),
+    () => weekTasks.slice(0, 5).map(taskHTML).join(''));
 
-  // Upcoming reminders
-  const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const upcoming = state.reminders.filter(r => {
-    const t = new Date(r.remind_at);
-    return t >= now && t <= soon;
-  }).slice(0, 5);
-
+  // Reminders panel — only when user enabled it
   const reList = document.getElementById('todayRemindersList');
-  if (upcoming.length === 0) {
-    reList.innerHTML = '<p class="list-empty">No reminders coming up.</p>';
+  const remindersPanel = document.getElementById('todayRemindersPanel');
+  if (remindersPanel.dataset.userHidden === '1') {
+    remindersPanel.style.display = 'none';
   } else {
-    reList.innerHTML = upcoming.map(r => `
-      <div class="reminder-item">
-        <div class="reminder-bell">🔔</div>
-        <div class="task-body">
-          <div class="task-title">${escapeHtml(r.title)}</div>
-          <div class="reminder-time">${formatDateTime(new Date(r.remind_at))}</div>
+    remindersPanel.style.display = '';
+    const soon = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const upcoming = state.reminders.filter(r => {
+      const t = new Date(r.remind_at);
+      return t >= now && t <= soon;
+    }).slice(0, 5);
+    if (upcoming.length === 0) {
+      reList.innerHTML = `<p class="list-empty">${COPY.emptyReminders()}</p>`;
+    } else {
+      reList.innerHTML = upcoming.map(r => `
+        <div class="reminder-item">
+          <div class="reminder-bell">🔔</div>
+          <div class="task-body">
+            <div class="task-title">${escapeHtml(r.title)}</div>
+            <div class="reminder-time">${formatDateTime(new Date(r.remind_at))}</div>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
   }
+
+  // Exam banner
+  updateExamBanner(exams);
 }
 
 // Show banner when a test/quiz is within 3 days, unless dismissed for that exam
@@ -1135,8 +1394,313 @@ function addSyncEntry(html, kind = '') {
 }
 
 // ==========================================================
-// MODALS
+// SETTINGS PAGE — appearance, profile, today layout, danger zone
 // ==========================================================
+const ACCENT_PALETTE = [
+  '#d4a857', // gold (default)
+  '#e08667', // coral
+  '#f0c274', // warm peach
+  '#c05a3e', // rust
+  '#b8c9e0', // powder blue
+  '#7ab0c4', // teal
+  '#8fb67c', // sage
+  '#c9a3d4', // lilac
+  '#d68aa3', // rose
+  '#a8b87c', // olive
+];
+
+async function renderSettingsView() {
+  // Pull fresh settings each time, in case other tabs changed them
+  try { state.settings = await api.settings(); } catch (e) {}
+
+  const s = state.settings || {};
+
+  // Profile
+  document.getElementById('displayNameInput').value = s.display_name || '';
+  document.getElementById('greetingStyleSelect').value = s.greeting_style || 'warm';
+
+  // Accent color picker
+  const accentPicker = document.getElementById('accentColorPicker');
+  accentPicker.innerHTML = ACCENT_PALETTE.map(c => `
+    <div class="color-swatch ${c === (s.accent_color || '#d4a857') ? 'selected' : ''}"
+         style="background:${c}" data-color="${c}"></div>
+  `).join('');
+  accentPicker.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.addEventListener('click', async () => {
+      accentPicker.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      const color = sw.dataset.color;
+      try {
+        await api.updateSettings({ accent_color: color });
+        state.settings.accent_color = color;
+        applyAccentColor();
+      } catch (err) { alert(err.message); }
+    });
+  });
+
+  // Logo settings
+  renderLogoSettings();
+
+  // Today panel toggles
+  const toggleMap = {
+    'toggle_show_overdue': 'show_overdue',
+    'toggle_show_exams': 'show_exams',
+    'toggle_show_today': 'show_today',
+    'toggle_show_week': 'show_week',
+    'toggle_show_reminders_today': 'show_reminders_today',
+  };
+  for (const [domId, key] of Object.entries(toggleMap)) {
+    const el = document.getElementById(domId);
+    if (!el) continue;
+    el.checked = s[key] !== false && (key === 'show_reminders_today' ? !!s[key] : s[key] !== false);
+    if (key === 'show_reminders_today') el.checked = !!s[key];
+    el.onchange = async () => {
+      try {
+        const patch = { [key]: el.checked };
+        await api.updateSettings(patch);
+        state.settings[key] = el.checked;
+        applyTodayPanelVisibility();
+      } catch (err) { alert(err.message); el.checked = !el.checked; }
+    };
+  }
+}
+
+function renderLogoSettings() {
+  const s = state.settings || {};
+  const pinned = s.pinned_logo;
+  const isPinned = pinned !== null && pinned !== undefined;
+
+  document.getElementById('logoCurrentImg').src = `/logos/${state.currentLogoIdx}.png`;
+  document.getElementById('logoMode').textContent = isPinned
+    ? `Pinned — using cube #${pinned + 1} every time.`
+    : 'Random — a different cube each open.';
+
+  document.getElementById('pinLogoBtn').style.display = isPinned ? 'none' : '';
+  document.getElementById('unpinLogoBtn').style.display = isPinned ? '' : 'none';
+
+  // Build gallery (lazy: only build once)
+  const gallery = document.getElementById('logoGallery');
+  if (!gallery.dataset.built) {
+    let html = '';
+    for (let i = 0; i < 42; i++) {
+      html += `<img src="/logos/${i}.png" data-idx="${i}" alt="" />`;
+    }
+    gallery.innerHTML = html;
+    gallery.dataset.built = '1';
+    gallery.querySelectorAll('img').forEach(img => {
+      img.addEventListener('click', async () => {
+        const idx = +img.dataset.idx;
+        setLogo(idx);
+        try {
+          await api.updateSettings({ pinned_logo: idx });
+          state.settings.pinned_logo = idx;
+          renderLogoSettings();
+        } catch (err) { alert(err.message); }
+      });
+    });
+  }
+  // Update active highlight in gallery
+  gallery.querySelectorAll('img').forEach(img => {
+    img.classList.toggle('active', +img.dataset.idx === state.currentLogoIdx);
+  });
+}
+
+document.getElementById('rerollLogoBtn').addEventListener('click', () => {
+  setLogo(); // new random
+  // If currently pinned, keep pinned mode but on new id; if random, just preview new
+  if (state.settings && state.settings.pinned_logo !== null && state.settings.pinned_logo !== undefined) {
+    api.updateSettings({ pinned_logo: state.currentLogoIdx }).then(() => {
+      state.settings.pinned_logo = state.currentLogoIdx;
+      renderLogoSettings();
+    });
+  } else {
+    renderLogoSettings();
+  }
+});
+
+document.getElementById('pinLogoBtn').addEventListener('click', async () => {
+  try {
+    await api.updateSettings({ pinned_logo: state.currentLogoIdx });
+    state.settings.pinned_logo = state.currentLogoIdx;
+    renderLogoSettings();
+  } catch (err) { alert(err.message); }
+});
+
+document.getElementById('unpinLogoBtn').addEventListener('click', async () => {
+  try {
+    await api.updateSettings({ pinned_logo: null });
+    state.settings.pinned_logo = null;
+    setLogo(); // new random
+    renderLogoSettings();
+  } catch (err) { alert(err.message); }
+});
+
+document.getElementById('browseLogoBtn').addEventListener('click', () => {
+  const gallery = document.getElementById('logoGallery');
+  gallery.style.display = gallery.style.display === 'none' ? '' : 'none';
+});
+
+// Profile field saves (debounced)
+let profileSaveTimer = null;
+['displayNameInput', 'greetingStyleSelect'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    clearTimeout(profileSaveTimer);
+    profileSaveTimer = setTimeout(saveProfile, 500);
+  });
+  el.addEventListener('change', () => {
+    clearTimeout(profileSaveTimer);
+    saveProfile();
+  });
+});
+
+async function saveProfile() {
+  const display_name = document.getElementById('displayNameInput').value.trim() || null;
+  const greeting_style = document.getElementById('greetingStyleSelect').value;
+  try {
+    await api.updateSettings({ display_name, greeting_style });
+    state.settings.display_name = display_name;
+    state.settings.greeting_style = greeting_style;
+    document.getElementById('userName').textContent = display_name || state.user.username;
+    if (state.currentView === 'today') renderToday();
+  } catch (err) { /* silent */ }
+}
+
+// ==========================================================
+// CLEAR TASKS — danger zone
+// ==========================================================
+document.getElementById('clearCompletedBtn').addEventListener('click', () => {
+  const count = state.tasks.filter(t => t.completed).length;
+  if (count === 0) return showToast('Nothing to clear', 'No completed tasks yet.');
+  customConfirm({
+    title: 'Clear completed tasks?',
+    body: `This deletes ${count} completed task${count === 1 ? '' : 's'}. The unchecked ones stay.`,
+    okText: 'Clear them',
+    onOk: async () => {
+      try {
+        const r = await api.clearTasks({ mode: 'completed' });
+        state.tasks = state.tasks.filter(t => !t.completed);
+        showToast('Cleared', `Deleted ${r.deleted} completed task${r.deleted === 1 ? '' : 's'}.`);
+        await loadSubjects();
+        renderAll();
+      } catch (err) { alert(err.message); }
+    }
+  });
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (state.tasks.length === 0) return showToast('Nothing to clear', 'No tasks yet.');
+  customConfirm({
+    title: 'Clear EVERY task?',
+    body: `This deletes all ${state.tasks.length} of your tasks — completed, open, all of them. Classes and notes are kept. Are you sure?`,
+    okText: 'Yes, clear everything',
+    danger: true,
+    onOk: async () => {
+      try {
+        const r = await api.clearTasks({ mode: 'all' });
+        state.tasks = [];
+        showToast('Cleared', `Deleted ${r.deleted} task${r.deleted === 1 ? '' : 's'}.`);
+        await loadSubjects();
+        renderAll();
+      } catch (err) { alert(err.message); }
+    }
+  });
+});
+
+document.getElementById('clearBySubjectBtn').addEventListener('click', () => {
+  if (state.subjects.length === 0) return showToast('No classes', 'Add a class first.');
+  const select = document.getElementById('clearSubjectSelect');
+  select.innerHTML = state.subjects.map(s => {
+    const taskCount = state.tasks.filter(t => t.subject_id === s.id).length;
+    return `<option value="${s.id}">${escapeHtml(s.name)} — ${taskCount} task${taskCount === 1 ? '' : 's'}</option>`;
+  }).join('');
+  openModal('clearSubjectModal');
+});
+
+document.getElementById('clearSubjectForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const subjectId = +document.getElementById('clearSubjectSelect').value;
+  const subject = state.subjects.find(s => s.id === subjectId);
+  closeModal();
+  customConfirm({
+    title: `Clear ${subject?.name || 'class'}?`,
+    body: `This deletes every task linked to "${subject?.name}". The class itself stays.`,
+    okText: 'Clear them',
+    onOk: async () => {
+      try {
+        const r = await api.clearTasks({ mode: 'subject', subject_id: subjectId });
+        state.tasks = state.tasks.filter(t => t.subject_id !== subjectId);
+        showToast('Cleared', `Deleted ${r.deleted} task${r.deleted === 1 ? '' : 's'} from ${subject?.name}.`);
+        await loadSubjects();
+        renderAll();
+      } catch (err) { alert(err.message); }
+    }
+  });
+});
+
+document.getElementById('clearByDateBtn').addEventListener('click', () => {
+  document.getElementById('clearBeforeInput').value = '';
+  document.getElementById('clearAfterInput').value = '';
+  openModal('clearDateModal');
+});
+
+document.getElementById('clearDateForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const before = document.getElementById('clearBeforeInput').value;
+  const after = document.getElementById('clearAfterInput').value;
+  if (!before && !after) return alert('Pick at least one date.');
+  closeModal();
+
+  let descPart = '';
+  if (before && after) descPart = `before ${before} OR after ${after}`;
+  else if (before) descPart = `before ${before}`;
+  else descPart = `after ${after}`;
+
+  customConfirm({
+    title: 'Clear by date?',
+    body: `This deletes tasks with a due date ${descPart}. Tasks without a due date won't be touched.`,
+    okText: 'Clear them',
+    onOk: async () => {
+      try {
+        const payload = { mode: 'date_range' };
+        if (before) payload.before_date = before;
+        if (after) payload.after_date = after;
+        const r = await api.clearTasks(payload);
+        // Refresh tasks instead of trying to predict locally
+        await loadTasks();
+        showToast('Cleared', `Deleted ${r.deleted} task${r.deleted === 1 ? '' : 's'}.`);
+        await loadSubjects();
+        renderAll();
+      } catch (err) { alert(err.message); }
+    }
+  });
+});
+
+// ==========================================================
+// CUSTOM CONFIRM — replaces window.confirm with friendlier copy
+// ==========================================================
+function customConfirm({ title, body, okText = 'Confirm', danger = false, onOk }) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmBody').textContent = body;
+  const okBtn = document.getElementById('confirmOk');
+  okBtn.textContent = okText;
+  okBtn.classList.toggle('btn-danger', danger);
+
+  const cleanup = () => {
+    okBtn.replaceWith(okBtn.cloneNode(true));
+    document.getElementById('confirmCancel').replaceWith(document.getElementById('confirmCancel').cloneNode(true));
+  };
+  const newOk = okBtn.cloneNode(true);
+  okBtn.replaceWith(newOk);
+  newOk.addEventListener('click', () => { closeModal(); onOk?.(); });
+  const cancelBtn = document.getElementById('confirmCancel');
+  const newCancel = cancelBtn.cloneNode(true);
+  cancelBtn.replaceWith(newCancel);
+  newCancel.addEventListener('click', () => closeModal());
+
+  openModal('confirmModal');
+}
 function openModal(id) {
   document.getElementById('modalBackdrop').classList.add('active');
   document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
@@ -1201,7 +1765,7 @@ function toDateStr(y, m, d) {
 // STARTUP
 // ==========================================================
 async function init() {
-  setRandomLogo();
+  setLogo(); // random initial; gets overridden once settings load
   spawnParticles();
   try {
     await enterApp();

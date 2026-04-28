@@ -10,6 +10,7 @@ const tasksRoutes = require('./routes/tasks');
 const notesRoutes = require('./routes/notes');
 const remindersRoutes = require('./routes/reminders');
 const importRoutes = require('./routes/import');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,6 +25,7 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/reminders', remindersRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

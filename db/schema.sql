@@ -69,11 +69,20 @@ CREATE TABLE IF NOT EXISTS ical_feeds (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Per-user settings (Gemini API key, etc.)
+-- Per-user settings (Gemini API key, theme, preferences, etc.)
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   gemini_api_key TEXT,
   ai_enabled BOOLEAN DEFAULT FALSE,
+  accent_color VARCHAR(20) DEFAULT '#d4a857',
+  display_name VARCHAR(80),
+  greeting_style VARCHAR(20) DEFAULT 'warm',
+  pinned_logo INT,
+  show_overdue BOOLEAN DEFAULT TRUE,
+  show_exams BOOLEAN DEFAULT TRUE,
+  show_today BOOLEAN DEFAULT TRUE,
+  show_week BOOLEAN DEFAULT TRUE,
+  show_reminders_today BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -107,6 +116,17 @@ ALTER TABLE notes ADD COLUMN IF NOT EXISTS subject_id INT REFERENCES subjects(id
 
 -- Add feed_type to ical_feeds (classes vs assignments) if upgrading
 ALTER TABLE ical_feeds ADD COLUMN IF NOT EXISTS feed_type VARCHAR(20) DEFAULT 'assignments';
+
+-- Add user preference columns if upgrading from earlier version
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS accent_color VARCHAR(20) DEFAULT '#d4a857';
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS display_name VARCHAR(80);
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS greeting_style VARCHAR(20) DEFAULT 'warm';
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS pinned_logo INT;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_overdue BOOLEAN DEFAULT TRUE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_exams BOOLEAN DEFAULT TRUE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_today BOOLEAN DEFAULT TRUE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_week BOOLEAN DEFAULT TRUE;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS show_reminders_today BOOLEAN DEFAULT FALSE;
 
 -- =========================================================
 -- 3. INDEXES — created AFTER migrations so all columns exist

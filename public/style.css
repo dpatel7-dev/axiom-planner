@@ -1733,3 +1733,371 @@ body {
 @media (max-width: 800px) {
   .feed-pair { grid-template-columns: 1fr; }
 }
+
+/* =========================================================
+   LOGO TOUCH-UP — bigger, with presence
+   ========================================================= */
+.brand-logo-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+  position: relative;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.brand-logo-btn:hover {
+  transform: rotate(-6deg) scale(1.08);
+}
+.brand-logo-btn:active {
+  transform: scale(0.95);
+}
+.brand-logo-btn::after {
+  /* Soft amber glow that picks up the cube's orange */
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent, #d4a857) 0%, transparent 70%);
+  opacity: 0.18;
+  z-index: -1;
+  filter: blur(10px);
+  transition: opacity 0.3s;
+}
+.brand-logo-btn:hover::after {
+  opacity: 0.35;
+}
+
+.brand .brand-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 3px 8px rgba(212, 168, 87, 0.3));
+}
+.brand .brand-name {
+  font-family: var(--serif);
+  font-size: 26px;
+  letter-spacing: 0.02em;
+}
+
+/* Auth screen — bigger logo, centered above wordmark */
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 56px;
+}
+.auth-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 16px rgba(212, 168, 87, 0.35));
+  animation: logoFloat 6s ease-in-out infinite;
+}
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+.auth-wordmark {
+  font-family: var(--serif);
+  font-size: 30px;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+}
+
+/* The old letter-mark is no longer used */
+.brand-mark { display: none; }
+
+/* =========================================================
+   ACCENT — driven by --accent CSS var (set from settings)
+   ========================================================= */
+:root {
+  --accent: #d4a857;
+}
+/* The .btn-primary, glows, focuses, and chip-active states all already use
+   --gold variables; the accent system overrides --gold dynamically via JS */
+
+/* =========================================================
+   FOCUS CARD — single hero "what to do next" card on Today
+   ========================================================= */
+.focus-card {
+  background: linear-gradient(135deg, rgba(212, 168, 87, 0.10), rgba(20, 24, 32, 0.55));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(212, 168, 87, 0.20);
+  border-radius: 6px;
+  padding: 32px 36px;
+  margin-bottom: 24px;
+}
+.focus-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.focus-headline {
+  font-family: var(--serif);
+  font-size: clamp(28px, 3.5vw, 40px);
+  line-height: 1.1;
+  color: var(--ink);
+  margin-bottom: 20px;
+  letter-spacing: -0.01em;
+}
+.focus-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+.focus-tasks:empty {
+  display: none;
+}
+
+/* =========================================================
+   TODAY GRID — refined
+   ========================================================= */
+.today-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+@media (min-width: 1280px) {
+  .today-grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* =========================================================
+   SETTINGS PAGE
+   ========================================================= */
+.setting-panel {
+  margin-bottom: 20px;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.setting-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+/* Logo picker on settings */
+.logo-picker {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px;
+  background: rgba(15, 18, 24, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.logo-current {
+  flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 12, 16, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  position: relative;
+}
+.logo-current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: radial-gradient(circle at center, var(--accent) 0%, transparent 70%);
+  opacity: 0.15;
+  pointer-events: none;
+}
+.logo-current img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  position: relative;
+  z-index: 1;
+}
+.logo-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.logo-mode {
+  font-size: 13px;
+  color: var(--ink-dim);
+  font-family: var(--serif-body);
+  font-style: italic;
+}
+.logo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(15, 18, 24, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.logo-gallery img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: rgba(10, 12, 16, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  padding: 6px;
+}
+.logo-gallery img:hover {
+  transform: scale(1.08);
+  border-color: var(--gold);
+  background: rgba(20, 24, 32, 0.7);
+}
+.logo-gallery img.active {
+  border-color: var(--gold);
+  border-width: 2px;
+  background: rgba(212, 168, 87, 0.12);
+}
+
+/* Toggle rows */
+.toggle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 700px) {
+  .toggle-grid { grid-template-columns: 1fr; }
+}
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(15, 18, 24, 0.4);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.toggle-row:hover {
+  background: rgba(20, 24, 32, 0.55);
+  border-color: var(--line-strong);
+}
+.toggle-row input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  transition: all 0.15s;
+}
+.toggle-row input[type="checkbox"]:hover { border-color: var(--gold); }
+.toggle-row input[type="checkbox"]:checked {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.toggle-row input[type="checkbox"]:checked::after {
+  content: '✓';
+  color: #1a1208;
+  font-size: 12px;
+  font-weight: bold;
+}
+.toggle-row > div { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.toggle-name {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.toggle-desc {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-family: var(--serif-body);
+  font-style: italic;
+}
+
+/* Danger zone */
+.danger-panel {
+  border-color: rgba(214, 104, 73, 0.20);
+}
+.danger-title { color: #e08667; }
+.danger-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 700px) {
+  .danger-grid { grid-template-columns: 1fr; }
+}
+.danger-grid .btn-ghost {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 16px;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+.danger-grid .btn-ghost strong {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.danger-grid .btn-ghost span {
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-family: var(--serif-body);
+  font-style: italic;
+}
+.btn-danger {
+  background: rgba(214, 104, 73, 0.15);
+  border-color: rgba(214, 104, 73, 0.35);
+}
+.btn-danger:hover {
+  background: rgba(214, 104, 73, 0.25);
+  border-color: rgba(214, 104, 73, 0.55);
+}
+.btn-danger strong { color: #e08667 !important; }
+.btn-primary.btn-danger {
+  background: #c05a3e;
+  color: var(--ink);
+  border: none;
+}
+.btn-primary.btn-danger:hover {
+  background: #d66849;
+}
+
+/* Modal body text (for confirm/clear dialogs) */
+.modal-body {
+  color: var(--ink-dim);
+  font-family: var(--serif-body);
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
