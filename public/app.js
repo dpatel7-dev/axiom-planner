@@ -2,6 +2,16 @@
 // AXIOM PLANNER — Frontend
 // ==========================================================
 
+import { AxiomCube, GeometricBackground } from '/cube.js';
+
+// Three.js cube instances (initialized after DOM loads)
+const cubeInstances = {
+  sidebar: null,
+  auth: null,
+  settings: null,
+};
+let geoBackground = null;
+
 const api = {
   async req(path, opts = {}) {
     const res = await fetch(path, {
@@ -27,6 +37,7 @@ const api = {
   createTask: (t) => api.req('/api/tasks', { method: 'POST', body: JSON.stringify(t) }),
   updateTask: (id, t) => api.req('/api/tasks/' + id, { method: 'PATCH', body: JSON.stringify(t) }),
   deleteTask: (id) => api.req('/api/tasks/' + id, { method: 'DELETE' }),
+  autoLinkTasks: (matches) => api.req('/api/tasks/auto-link', { method: 'POST', body: JSON.stringify({ matches }) }),
 
   notes: () => api.req('/api/notes'),
   createNote: (n) => api.req('/api/notes', { method: 'POST', body: JSON.stringify(n) }),
@@ -395,88 +406,103 @@ function pickNextLogo() {
   return next;
 }
 
-// Set logo without animation (initial paint)
+// Initialize all Three.js cube instances (called once after auth)
+function initLogoCubes() {
+  // Sidebar — small, rotates slowly
+  const mountSidebar = document.getElementById('logoMount3D');
+  if (mountSidebar && !cubeInstances.sidebar) {
+    cubeInstances.sidebar = new AxiomCube(mountSidebar, {
+      size: 64,
+      idx: logoState.current,
+      autoRotate: true,
+      rotateSpeed: 0.004,
+    });
+  }
+  // Settings preview
+  const mountSettings = document.getElementById('logoCurrent3D');
+  if (mountSettings && !cubeInstances.settings) {
+    cubeInstances.settings = new AxiomCube(mountSettings, {
+      size: 80,
+      idx: logoState.current,
+      autoRotate: true,
+      rotateSpeed: 0.005,
+    });
+  }
+}
+
+function initAuthCube() {
+  const mount = document.getElementById('authLogo3D');
+  if (mount && !cubeInstances.auth) {
+    cubeInstances.auth = new AxiomCube(mount, {
+      size: 100,
+      idx: Math.floor(Math.random() * 42),
+      autoRotate: true,
+      rotateSpeed: 0.006,
+    });
+  }
+}
+
+// Set logo without animation (initial state)
 function setLogoInstant(idx) {
   if (idx === undefined || idx === null || idx < 0 || idx > 41) idx = pickNextLogo();
   logoState.current = idx;
-  const src = `/logos/${idx}.png`;
-  // Both faces show the same on first paint
-  const front = document.getElementById('brandLogoMain');
-  const back = document.getElementById('brandLogoBack');
-  if (front) front.src = src;
-  if (back) back.src = src;
-  // Auth screen logo
-  const auth = document.getElementById('brandLogoAuth');
-  if (auth) auth.src = src;
-  // Settings preview
-  const cur = document.getElementById('logoCurrentImg');
-  if (cur) cur.src = src;
-  updateFaviconNoCache(idx);
+  if (cubeInstances.sidebar) cubeInstances.sidebar.setIdx(idx, false);
+  if (cubeInstances.settings) cubeInstances.settings.setIdx(idx, false);
+  updateFaviconFromCube(idx);
   updateLogoFabs();
 }
 
-// Animate to a new logo with a 3D cube flip
+// Animate to a new logo with the Three.js flip animation
 function flipToLogo(idx) {
-  if (logoState.isFlipping) return;
   if (idx === undefined || idx === null) idx = pickNextLogo();
   if (idx === logoState.current) return;
-
-  logoState.isFlipping = true;
-  const flipper = document.getElementById('logoFlipper');
-  const stage = document.getElementById('logoStage');
-  if (!flipper) {
-    setLogoInstant(idx);
-    logoState.isFlipping = false;
-    return;
-  }
-
-  const front = document.getElementById('brandLogoMain');
-  const back = document.getElementById('brandLogoBack');
-  const newSrc = `/logos/${idx}.png`;
-
-  // Whichever face is currently HIDDEN gets the new image; we then flip TO it
-  const isCurrentlyFlipped = flipper.classList.contains('flipped');
-  if (isCurrentlyFlipped) {
-    // back face is showing → put new image on front, then unflip
-    front.src = newSrc;
-  } else {
-    // front face is showing → put new image on back, then flip
-    back.src = newSrc;
-  }
-
-  // Glow burst effect
-  stage.classList.add('glow-burst');
-
-  // Trigger flip
-  flipper.classList.toggle('flipped');
-
-  setTimeout(() => {
-    stage.classList.remove('glow-burst');
-    logoState.isFlipping = false;
-  }, 700);
-
-  // Update state immediately so next click can chain
   logoState.current = idx;
 
-  // Update peripheral spots (auth + settings preview)
-  const auth = document.getElementById('brandLogoAuth');
-  if (auth) auth.src = newSrc;
-  const cur = document.getElementById('logoCurrentImg');
-  if (cur) cur.src = newSrc;
-  updateFaviconNoCache(idx);
+  if (cubeInstances.sidebar) cubeInstances.sidebar.setIdx(idx, true);
+  if (cubeInstances.settings) cubeInstances.settings.setIdx(idx, true);
+
+  // Update favicon (rendering a cube to a tiny canvas) on a slight delay so the new cube exists
+  setTimeout(() => updateFaviconFromCube(idx), 100);
   updateLogoFabs();
 
   // Update gallery selection if open
-  document.querySelectorAll('#logoGallery img').forEach(img => {
-    img.classList.toggle('active', +img.dataset.idx === idx);
+  document.querySelectorAll('#logoGallery .logo-thumb').forEach(el => {
+    el.classList.toggle('active', +el.dataset.idx === idx);
   });
 }
 
-// Force-refresh favicon by appending a cache-buster query string
-function updateFaviconNoCache(idx) {
+// Generate the favicon by rendering the cube to a small offscreen canvas, then setting it
+function updateFaviconFromCube(idx) {
   const fav = document.getElementById('favicon');
   if (!fav) return;
-  fav.href = `/logos/${idx}-fav.png?v=${Date.now()}`;
+  // Use the sidebar instance's canvas (already rendered) — but we need a snapshot
+  // Easier path: hidden offscreen renderer
+  if (!cubeInstances._faviconRenderer) {
+    const div = document.createElement('div');
+    div.style.position = 'fixed';
+    div.style.top = '-9999px';
+    div.style.left = '-9999px';
+    div.style.width = '64px';
+    div.style.height = '64px';
+    document.body.appendChild(div);
+    cubeInstances._faviconRenderer = new AxiomCube(div, {
+      size: 64,
+      idx,
+      autoRotate: false,
+    });
+  } else {
+    cubeInstances._faviconRenderer.setIdx(idx, false);
+  }
+  // Wait one frame for it to render, then capture
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        const canvas = cubeInstances._faviconRenderer.renderer.domElement;
+        const url = canvas.toDataURL('image/png');
+        fav.href = url;
+      } catch (e) { /* ignore */ }
+    });
+  });
 }
 
 // Show pin/favorite state on the toolbar buttons
@@ -669,14 +695,18 @@ async function enterApp() {
   logoState.rotateFavoritesOnly = !!state.settings?.rotate_favorites_only;
 
   // Apply initial logo (pinned, or random from favorites/all)
-  if (logoState.pinned !== null) {
-    setLogoInstant(logoState.pinned);
-  } else {
-    setLogoInstant(pickNextLogo());
-  }
+  const startIdx = logoState.pinned !== null ? logoState.pinned : pickNextLogo();
+  logoState.current = startIdx;
 
   document.getElementById('userName').textContent = state.settings?.display_name || user.username;
   showScreen('appScreen');
+
+  // NOW initialize the sidebar/settings cubes (after the appScreen is visible
+  // so the canvases get correct dimensions)
+  initLogoCubes();
+  // Update favicon to match current logo
+  setTimeout(() => updateFaviconFromCube(startIdx), 200);
+
   await Promise.all([loadSubjects(), loadTasks(), loadNotes(), loadReminders()]);
   populateSubjectSelects();
   await refreshStats(true);
@@ -695,6 +725,14 @@ function applyAccentColor() {
   // Also derive a "hot" version (slightly lighter) and "deep" version
   const hot = lightenColor(accent, 0.15);
   document.documentElement.style.setProperty('--gold-hot', hot);
+
+  // Apply to Three.js scenes
+  const accentInt = parseInt(accent.replace('#', ''), 16);
+  if (geoBackground) geoBackground.setAccentColor(accentInt);
+  if (cubeInstances.sidebar) cubeInstances.sidebar.setAccentColor(accentInt);
+  if (cubeInstances.settings) cubeInstances.settings.setAccentColor(accentInt);
+  if (cubeInstances.auth) cubeInstances.auth.setAccentColor(accentInt);
+  if (cubeInstances._faviconRenderer) cubeInstances._faviconRenderer.setAccentColor(accentInt);
 }
 
 function applyTodayPanelVisibility() {
@@ -750,6 +788,9 @@ async function loadSubjects() {
 }
 
 function renderSubjects() {
+  // Update auto-link card (above grid)
+  updateAutoLinkCard();
+
   const grid = document.getElementById('subjectsGrid');
   if (state.subjects.length === 0) {
     grid.innerHTML = `<div class="subject-card-empty">${COPY.emptyClasses()}</div>`;
@@ -1825,8 +1866,7 @@ function renderLogoSettings() {
   const isPinned = logoState.pinned !== null;
   const cur = logoState.current;
 
-  const previewImg = document.getElementById('logoCurrentImg');
-  if (previewImg) previewImg.src = `/logos/${cur}.png`;
+  // Settings preview cube updates automatically via setIdx() in flipToLogo
 
   const modeEl = document.getElementById('logoMode');
   if (modeEl) {
@@ -1850,17 +1890,26 @@ function renderLogoSettings() {
   // Build gallery once
   const gallery = document.getElementById('logoGallery');
   if (gallery && !gallery.dataset.built) {
-    let html = '';
+    gallery.innerHTML = '';
     for (let i = 0; i < 42; i++) {
-      html += `<img src="/logos/${i}.png" data-idx="${i}" alt="" />`;
+      const cell = document.createElement('div');
+      cell.className = 'logo-thumb';
+      cell.dataset.idx = i;
+      gallery.appendChild(cell);
+      // Spawn mini Three.js cube — but lazily, only when scrolled near
+      // For simplicity, render all eagerly (42 small canvases — fine)
+      new AxiomCube(cell, {
+        size: 64,
+        idx: i,
+        autoRotate: true,
+        rotateSpeed: 0.003 + (i % 5) * 0.0008, // varied speeds
+      });
     }
-    gallery.innerHTML = html;
     gallery.dataset.built = '1';
-    gallery.querySelectorAll('img').forEach(img => {
-      img.addEventListener('click', async () => {
-        const idx = +img.dataset.idx;
+    gallery.querySelectorAll('.logo-thumb').forEach(cell => {
+      cell.addEventListener('click', async () => {
+        const idx = +cell.dataset.idx;
         flipToLogo(idx);
-        // Pin to this one
         try {
           await api.updateSettings({ pinned_logo: idx });
           logoState.pinned = idx;
@@ -1871,8 +1920,8 @@ function renderLogoSettings() {
     });
   }
   if (gallery) {
-    gallery.querySelectorAll('img').forEach(img => {
-      img.classList.toggle('active', +img.dataset.idx === logoState.current);
+    gallery.querySelectorAll('.logo-thumb').forEach(el => {
+      el.classList.toggle('active', +el.dataset.idx === logoState.current);
     });
   }
 
@@ -1884,25 +1933,31 @@ function renderLogoSettings() {
 function renderLogoFavoriteSlots() {
   const wrap = document.getElementById('logoFavoritesRow');
   if (!wrap) return;
-  let html = '';
-  // Up to 5 slots — fav slots first, then empty slots
+  // Clean up any existing cube instances on this row
+  wrap.querySelectorAll('.logo-favorite-slot').forEach(el => {
+    if (el._cube) { el._cube.destroy(); el._cube = null; }
+  });
+  wrap.innerHTML = '';
   for (let i = 0; i < 5; i++) {
+    const slot = document.createElement('div');
     if (i < logoState.favorites.length) {
       const idx = logoState.favorites[i];
-      html += `<div class="logo-favorite-slot" data-fav="${idx}" title="Click to use, ✕ to remove">
-        <img src="/logos/${idx}.png" alt="" />
-      </div>`;
+      slot.className = 'logo-favorite-slot';
+      slot.dataset.fav = idx;
+      slot.title = 'Click to use this favorite';
+      wrap.appendChild(slot);
+      slot._cube = new AxiomCube(slot, {
+        size: 40,
+        idx,
+        autoRotate: true,
+        rotateSpeed: 0.004,
+      });
+      slot.addEventListener('click', () => flipToLogo(idx));
     } else {
-      html += `<div class="logo-favorite-slot empty"></div>`;
+      slot.className = 'logo-favorite-slot empty';
+      wrap.appendChild(slot);
     }
   }
-  wrap.innerHTML = html;
-  wrap.querySelectorAll('.logo-favorite-slot[data-fav]').forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = +el.dataset.fav;
-      flipToLogo(idx);
-    });
-  });
 }
 
 document.getElementById('rerollLogoBtn').addEventListener('click', () => {
@@ -1947,6 +2002,122 @@ document.getElementById('rotateFavoritesToggle').addEventListener('change', asyn
     e.target.checked = !checked;
   }
 });
+
+// ==========================================================
+// MATCH BACKGROUND — extract dominant color from background.jpg
+// ==========================================================
+document.getElementById('matchBackgroundBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('matchBackgroundBtn');
+  btn.disabled = true;
+  btn.textContent = 'Looking at the colors…';
+  try {
+    const colors = await extractBackgroundColors('/background.jpg');
+    if (colors.length === 0) throw new Error('Could not read colors from image');
+    // Pick the most vibrant warm color as the accent. If none warm, use brightest.
+    const best = pickAccentFromPalette(colors);
+    await api.updateSettings({ accent_color: best });
+    state.settings.accent_color = best;
+    applyAccentColor();
+    // Re-render the swatches
+    renderSettingsView();
+    showToast('Accent updated', `Pulled from your background — ${best}`);
+  } catch (err) {
+    showToast('Could not match', err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Match my background';
+  }
+});
+
+// Pull dominant colors from an image using k-means on downsampled pixels
+async function extractBackgroundColors(imageUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // Downsample to a small canvas for speed
+      const W = 64, H = 64;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, W, H);
+      const { data } = ctx.getImageData(0, 0, W, H);
+
+      // Collect pixels (skip fully transparent + super dark/bright extremes)
+      const pixels = [];
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        if (a < 128) continue;
+        const sum = r + g + b;
+        if (sum < 60 || sum > 720) continue; // too dark / too bright
+        pixels.push([r, g, b]);
+      }
+      if (pixels.length < 50) return reject(new Error('Image too plain to read colors'));
+
+      // K-means with k=5
+      const k = 5;
+      const centroids = [];
+      for (let i = 0; i < k; i++) {
+        centroids.push(pixels[Math.floor(Math.random() * pixels.length)].slice());
+      }
+      for (let iter = 0; iter < 12; iter++) {
+        const buckets = Array.from({ length: k }, () => []);
+        for (const px of pixels) {
+          let best = 0, bestDist = Infinity;
+          for (let j = 0; j < k; j++) {
+            const c = centroids[j];
+            const d = (px[0] - c[0]) ** 2 + (px[1] - c[1]) ** 2 + (px[2] - c[2]) ** 2;
+            if (d < bestDist) { bestDist = d; best = j; }
+          }
+          buckets[best].push(px);
+        }
+        for (let j = 0; j < k; j++) {
+          if (buckets[j].length === 0) continue;
+          const sumR = buckets[j].reduce((s, p) => s + p[0], 0);
+          const sumG = buckets[j].reduce((s, p) => s + p[1], 0);
+          const sumB = buckets[j].reduce((s, p) => s + p[2], 0);
+          centroids[j] = [Math.round(sumR / buckets[j].length), Math.round(sumG / buckets[j].length), Math.round(sumB / buckets[j].length)];
+        }
+      }
+      // Sort by saturation × bucket count
+      const result = centroids.map((c, i) => ({
+        rgb: c,
+        hex: rgbToHex(c[0], c[1], c[2]),
+        saturation: rgbSaturation(c[0], c[1], c[2]),
+        warmth: rgbWarmth(c[0], c[1], c[2]),
+      }));
+      result.sort((a, b) => b.saturation - a.saturation);
+      resolve(result);
+    };
+    img.onerror = () => reject(new Error('Could not load background image'));
+    img.src = imageUrl;
+  });
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r, g, b].map(x => Math.max(0, Math.min(255, x)).toString(16).padStart(2, '0')).join('');
+}
+
+function rgbSaturation(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === 0) return 0;
+  return (max - min) / max;
+}
+
+function rgbWarmth(r, g, b) {
+  // Higher = warmer (red+yellow). Lower = cooler (blue).
+  return (r * 1.2 + (g * 0.6) - b) / 255;
+}
+
+function pickAccentFromPalette(colors) {
+  // Prefer a color that is BOTH saturated AND warm-toned (good readable accent)
+  const scored = colors.map(c => ({
+    ...c,
+    score: c.saturation * 0.7 + Math.max(0, c.warmth) * 0.3,
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].hex;
+}
 
 // Profile field saves (debounced)
 let profileSaveTimer = null;
@@ -2225,6 +2396,58 @@ function suggestSubject(title, subjects) {
 }
 
 // ==========================================================
+// AUTO-LINK CARD — bulk-link unmatched tasks to classes
+// ==========================================================
+function updateAutoLinkCard() {
+  const card = document.getElementById('autoLinkCard');
+  if (!card) return;
+  if (state.subjects.length === 0) { card.style.display = 'none'; return; }
+
+  // Find tasks without subject_id that we CAN match
+  const unmatched = state.tasks.filter(t => !t.subject_id && !t.completed);
+  if (unmatched.length === 0) { card.style.display = 'none'; return; }
+
+  // How many of those would actually match to something via the local matcher?
+  const matchable = unmatched.filter(t => suggestSubject(t.title, state.subjects)).length;
+  if (matchable === 0) { card.style.display = 'none'; return; }
+
+  card.style.display = '';
+  document.getElementById('autoLinkCount').textContent =
+    `${matchable} task${matchable === 1 ? '' : 's'} could be auto-linked to a class`;
+  document.getElementById('autoLinkSub').textContent =
+    matchable === unmatched.length
+      ? 'Tap to link them.'
+      : `Tap to link them. ${unmatched.length - matchable} won't be touched (no clear class match).`;
+}
+
+document.getElementById('autoLinkBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('autoLinkBtn');
+  btn.disabled = true;
+  btn.textContent = 'Linking…';
+  try {
+    const matches = [];
+    for (const t of state.tasks) {
+      if (t.subject_id || t.completed) continue;
+      const m = suggestSubject(t.title, state.subjects);
+      if (m) matches.push({ id: t.id, subject_id: m.subject.id });
+    }
+    if (matches.length === 0) {
+      showToast('Nothing to link', 'No confident matches found.');
+      return;
+    }
+    const r = await api.autoLinkTasks(matches);
+    showToast('Linked!', `${r.linked} task${r.linked === 1 ? '' : 's'} now linked to a class.`);
+    await Promise.all([loadTasks(), loadSubjects()]);
+    renderAll();
+  } catch (err) {
+    showToast('Link failed', err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Auto-link';
+  }
+});
+
+// ==========================================================
 // HELPERS
 // ==========================================================
 function escapeHtml(str) {
@@ -2255,7 +2478,16 @@ function toDateStr(y, m, d) {
 // STARTUP
 // ==========================================================
 async function init() {
-  setLogoInstant(Math.floor(Math.random() * 42)); // initial paint before settings load
+  // Boot up Three.js geometric background layer
+  const geoMount = document.getElementById('geoBg');
+  if (geoMount) {
+    geoBackground = new GeometricBackground(geoMount, {
+      accentColor: 0xd4a857, // initial — will be updated by accent setting
+    });
+  }
+  // Auth screen cube
+  initAuthCube();
+
   spawnParticles();
   try {
     await enterApp();

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Axiom</title>
   <meta name="description" content="A flexible, calm planner for students." />
-  <link rel="icon" type="image/png" id="favicon" href="/logos/0-fav.png" />
+  <!-- Initial favicon is a 1x1 transparent PNG; gets replaced by JS once the Three.js cube renders -->
+  <link rel="icon" type="image/png" id="favicon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,6 +15,9 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+
+  <!-- Three.js geometric layer (wireframes + particles) — sits on top of bg-scene -->
+  <div id="geoBg" class="geo-bg" aria-hidden="true"></div>
 
   <!-- ====== ANIMATED BACKGROUND ====== -->
   <div class="bg-scene" aria-hidden="true">
@@ -38,7 +42,7 @@
   <div id="authScreen" class="screen active">
     <div class="auth-wrap">
       <div class="auth-brand">
-        <img class="auth-logo" id="brandLogoAuth" alt="" />
+        <div class="auth-logo-3d" id="authLogo3D"></div>
         <div class="auth-wordmark">Axiom</div>
       </div>
 
@@ -75,10 +79,7 @@
       <div class="sidebar-top">
         <div class="brand">
           <div class="logo-stage" id="logoStage">
-            <div class="logo-flipper" id="logoFlipper">
-              <img class="logo-face logo-face-front" id="brandLogoMain" alt="" />
-              <img class="logo-face logo-face-back" id="brandLogoBack" alt="" />
-            </div>
+            <div class="logo-3d-mount" id="logoMount3D"></div>
             <button class="logo-fab logo-fab-fav" id="logoFavBtn" title="Favorite" aria-label="Favorite">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
             </button>
@@ -273,6 +274,14 @@
           </div>
           <button class="btn-primary" id="newSubjectBtn">+ Add class</button>
         </header>
+        <div id="autoLinkCard" class="auto-link-card" style="display:none">
+          <div class="auto-link-icon">🪄</div>
+          <div class="auto-link-text">
+            <strong id="autoLinkCount">—</strong>
+            <span id="autoLinkSub">Tap to link them to a class.</span>
+          </div>
+          <button class="btn-primary" id="autoLinkBtn">Auto-link</button>
+        </div>
         <div class="subjects-grid" id="subjectsGrid"></div>
       </section>
 
@@ -441,13 +450,17 @@
           <div class="setting-row" style="margin-top:14px">
             <label class="setting-label">Accent color</label>
             <div class="color-picker" id="accentColorPicker"></div>
+            <div class="row gap" style="margin-top:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn-ghost" id="matchBackgroundBtn">✨ Match my background</button>
+              <span class="panel-hint" style="margin:0">Auto-extracts colors from your background image.</span>
+            </div>
           </div>
 
           <div class="setting-row" style="margin-top:24px">
             <label class="setting-label">Logo</label>
             <div class="logo-picker">
-              <div class="logo-current" id="logoCurrent">
-                <img id="logoCurrentImg" alt="" />
+              <div class="logo-current">
+                <div class="logo-current-3d" id="logoCurrent3D"></div>
               </div>
               <div class="logo-controls">
                 <p id="logoMode" class="logo-mode">Random — a different cube each open.</p>
@@ -672,6 +685,6 @@
 
   <div id="toastStack" class="toast-stack"></div>
 
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

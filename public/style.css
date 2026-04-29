@@ -2115,38 +2115,6 @@ body {
   cursor: pointer;
 }
 
-.logo-flipper {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.7s cubic-bezier(0.5, 0.1, 0.3, 1);
-  filter: drop-shadow(0 4px 12px rgba(212, 168, 87, 0.35));
-}
-
-.logo-flipper.flipping {
-  transform: rotateY(180deg);
-}
-
-/* When the flip completes, swap front<->back so we can flip back next time
-   without snapping. We toggle the 'flipped' class to track which face is showing */
-.logo-flipper.flipped .logo-face-front { transform: rotateY(180deg); }
-.logo-flipper.flipped .logo-face-back  { transform: rotateY(0deg); }
-
-.logo-face {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transition: transform 0s;
-}
-
-.logo-face-front { transform: rotateY(0deg); }
-.logo-face-back  { transform: rotateY(180deg); }
-
 /* Glow pulse when changing */
 .logo-stage::after {
   content: '';
@@ -2166,18 +2134,6 @@ body {
   opacity: 0.7;
   transform: scale(1.4);
   transition: opacity 0.6s, transform 0.6s;
-}
-
-.logo-stage:hover .logo-flipper {
-  filter: drop-shadow(0 6px 20px rgba(212, 168, 87, 0.55));
-}
-
-.logo-stage:active .logo-flipper {
-  transform: scale(0.94);
-}
-
-.logo-stage.flipping:active .logo-flipper {
-  transform: rotateY(180deg) scale(0.94);
 }
 
 /* Floating action buttons appear on hover */
@@ -2581,4 +2537,208 @@ body {
   margin-top: 8px;
   font-family: var(--serif-body);
   font-style: italic;
+}
+
+/* =========================================================
+   THREE.JS GEOMETRIC LAYER — sits between bg and UI
+   ========================================================= */
+.geo-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.geo-bg canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* The bg-scene needs to sit underneath the geo layer */
+.bg-scene { z-index: -1; }
+
+/* App needs to sit above the geo bg */
+.screen { z-index: 2; }
+
+/* =========================================================
+   3D LOGO MOUNT POINTS
+   ========================================================= */
+.logo-3d-mount {
+  width: 64px;
+  height: 64px;
+  display: block;
+  /* Soft drop shadow for the cube */
+  filter: drop-shadow(0 4px 14px rgba(212, 168, 87, 0.35));
+}
+.logo-3d-mount canvas {
+  display: block;
+}
+
+.auth-logo-3d {
+  width: 100px;
+  height: 100px;
+  filter: drop-shadow(0 6px 22px rgba(212, 168, 87, 0.45));
+  animation: logoFloat 6s ease-in-out infinite;
+}
+
+.logo-current-3d {
+  width: 80px;
+  height: 80px;
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(212, 168, 87, 0.3));
+}
+
+/* =========================================================
+   AUTO-LINK CARD (Classes view)
+   ========================================================= */
+.auto-link-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, rgba(212, 168, 87, 0.10), rgba(15, 18, 24, 0.55));
+  border: 1px solid rgba(212, 168, 87, 0.28);
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+  animation: hintSlideIn 0.4s ease;
+}
+.auto-link-icon { font-size: 24px; flex-shrink: 0; }
+.auto-link-text { flex: 1; min-width: 0; }
+.auto-link-text strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--ink);
+  font-weight: 400;
+  margin-bottom: 2px;
+}
+.auto-link-text span {
+  font-family: var(--serif-body);
+  font-style: italic;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+/* =========================================================
+   GEOMETRIC ACCENTS — hybrid: keep serif, add geo touches
+   ========================================================= */
+
+/* Subtle geometric corner brackets on key panels */
+.focus-card,
+.progress-hero {
+  position: relative;
+}
+.focus-card::before,
+.focus-card::after,
+.progress-hero::before {
+  /* corner bracket */
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--gold);
+  opacity: 0.4;
+}
+.focus-card::before {
+  top: 8px; left: 8px;
+  border-right: none; border-bottom: none;
+}
+.focus-card::after {
+  bottom: 8px; right: 8px;
+  border-left: none; border-top: none;
+}
+
+/* Geometric chip styling — sharper edges, hex feel */
+.chip,
+.chip-select {
+  border-radius: 2px;
+  position: relative;
+}
+.chip.active {
+  background: linear-gradient(135deg, rgba(212, 168, 87, 0.18), rgba(212, 168, 87, 0.08));
+  border-color: var(--gold);
+}
+
+/* Buttons get a subtle geometric pattern overlay on hover */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent 0,
+    transparent 8px,
+    rgba(255, 255, 255, 0.04) 8px,
+    rgba(255, 255, 255, 0.04) 9px
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+/* =========================================================
+   LOGO FAB POSITIONING (without flipper)
+   ========================================================= */
+.logo-stage {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.logo-stage:hover { transform: scale(1.04); }
+.logo-stage:active { transform: scale(0.96); }
+
+.logo-stage::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent, #d4a857) 0%, transparent 70%);
+  opacity: 0.18;
+  z-index: -1;
+  filter: blur(10px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+.logo-stage:hover::after { opacity: 0.35; transform: scale(1.15); }
+
+
+/* =========================================================
+   3D LOGO GALLERY THUMBNAILS
+   ========================================================= */
+.logo-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(10, 12, 16, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.logo-thumb:hover {
+  transform: scale(1.08);
+  border-color: var(--gold);
+  background: rgba(20, 24, 32, 0.7);
+}
+.logo-thumb.active {
+  border-color: var(--gold);
+  border-width: 2px;
+  background: rgba(212, 168, 87, 0.12);
+  box-shadow: 0 0 16px rgba(212, 168, 87, 0.3);
+}
+.logo-thumb canvas {
+  display: block;
 }

@@ -108,4 +108,36 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// POST /api/tasks/auto-link — bulk-link tasks with NULL subject_id using AI/keywords
+// Body: { matches: [{ id, subject_id }, ...] }  — frontend computes via local matcher
+router.post('/auto-link', async (req, res) => {
+  const { matches } = req.body || {};
+  if (!Array.isArray(matches) || matches.length === 0) {
+    return res.status(400).json({ error: 'No matches provided' });
+  }
+  const client = await pool.connect();
+  let linked = 0;
+  try {
+    await client.query('BEGIN');
+    for (const m of matches) {
+      const id = parseInt(m.id);
+      const sid = parseInt(m.subject_id);
+      if (!Number.isInteger(id) || !Number.isInteger(sid)) continue;
+      const r = await client.query(
+        'UPDATE tasks SET subject_id = $1 WHERE id = $2 AND user_id = $3 AND subject_id IS NULL RETURNING id',
+        [sid, id, req.userId]
+      );
+      if (r.rows.length > 0) linked++;
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    client.release();
+    return res.status(500).json({ error: 'Server error' });
+  }
+  client.release();
+  res.json({ ok: true, linked });
+});
+
 module.exports = router;
