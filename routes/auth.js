@@ -2,11 +2,12 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { signToken, requireAuth } = require('./auth-middleware');
+const { limiters } = require('../lib/rate-limit');
 
 const router = express.Router();
 
 // POST /api/auth/signup
-router.post('/signup', async (req, res) => {
+router.post('/signup', limiters.auth, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
@@ -39,7 +40,7 @@ router.post('/signup', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', limiters.auth, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });

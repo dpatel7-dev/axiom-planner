@@ -14,11 +14,13 @@ router.get('/', async (req, res) => {
       SELECT
         accent_color, display_name, greeting_style, pinned_logo, rotate_favorites_only,
         show_overdue, show_exams, show_today, show_week, show_reminders_today,
-        ai_enabled, gemini_api_key IS NOT NULL AS has_gemini_key
+        ai_enabled,
+        gemini_api_key IS NOT NULL AS has_gemini_key,
+        anthropic_api_key IS NOT NULL AS has_anthropic_key,
+        preferred_ai, theme
       FROM user_settings WHERE user_id = $1
     `, [req.userId]);
     if (r.rows.length === 0) {
-      // Return defaults
       return res.json({
         accent_color: '#d4a857',
         display_name: null,
@@ -32,6 +34,9 @@ router.get('/', async (req, res) => {
         show_reminders_today: false,
         ai_enabled: false,
         has_gemini_key: false,
+        has_anthropic_key: false,
+        preferred_ai: 'gemini',
+        theme: 'dawn',
       });
     }
     res.json(r.rows[0]);
@@ -45,7 +50,7 @@ router.get('/', async (req, res) => {
 router.patch('/', async (req, res) => {
   const allowed = [
     'accent_color', 'display_name', 'greeting_style', 'pinned_logo',
-    'rotate_favorites_only',
+    'rotate_favorites_only', 'preferred_ai', 'theme',
     'show_overdue', 'show_exams', 'show_today', 'show_week', 'show_reminders_today'
   ];
 
@@ -60,6 +65,12 @@ router.patch('/', async (req, res) => {
   }
   if (updates.greeting_style && !VALID_GREETING_STYLES.includes(updates.greeting_style)) {
     return res.status(400).json({ error: 'Invalid greeting style' });
+  }
+  if (updates.preferred_ai !== undefined && !['gemini', 'claude'].includes(updates.preferred_ai)) {
+    return res.status(400).json({ error: 'preferred_ai must be "gemini" or "claude"' });
+  }
+  if (updates.theme !== undefined && !['dawn', 'calm'].includes(updates.theme)) {
+    return res.status(400).json({ error: 'theme must be "dawn" or "calm"' });
   }
   if (updates.display_name !== undefined && updates.display_name !== null) {
     updates.display_name = String(updates.display_name).slice(0, 80) || null;
@@ -105,6 +116,34 @@ router.patch('/', async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
+});
+
+// POST /api/settings/anthropic-key — save and validate Claude API key
+router.post('/anthropic-key', async (req, res) => {
+  const { anthropic_api_key } = req.body || {};
+  if (!anthropic_api_key) return res.status(400).json({ error: 'API key required' });
+  try {
+    const { testClaudeKey } = require('../lib/anthropic');
+    await testClaudeKey(anthropic_api_key);
+    await pool.query(`
+      INSERT INTO user_settings (user_id, anthropic_api_key, updated_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id) DO UPDATE
+      SET anthropic_api_key = $2, updated_at = CURRENT_TIMESTAMP
+    `, [req.userId, anthropic_api_key]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/settings/anthropic-key
+router.delete('/anthropic-key', async (req, res) => {
+  await pool.query(
+    'UPDATE user_settings SET anthropic_api_key = NULL WHERE user_id = $1',
+    [req.userId]
+  );
+  res.json({ ok: true });
 });
 
 // POST /api/settings/clear-tasks — granular task clearing

@@ -14,6 +14,11 @@ services:
         fromDatabase:
           name: axiom-db
           property: connectionString
+      # ↓ Set these in Render's dashboard after first deploy
+      - key: OWNER_USERNAMES
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
 
 databases:
   - name: axiom-db

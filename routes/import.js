@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('./auth-middleware');
+const { limiters } = require('../lib/rate-limit');
 const { parseICS } = require('../lib/ics-parser');
 const { extractSubjects, transformAssignments, testApiKey } = require('../lib/gemini');
 
@@ -107,7 +108,7 @@ router.delete('/feeds/:id', async (req, res) => {
 // Sync — different logic depending on feed type
 // ----------------------------------------------------------
 
-router.post('/feeds/:id/sync', async (req, res) => {
+router.post('/feeds/:id/sync', limiters.importSync, async (req, res) => {
   const feedId = req.params.id;
   const { daysAhead = 28 } = req.body || {};
 

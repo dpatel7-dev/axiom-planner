@@ -1,11 +1,26 @@
 <!DOCTYPE html>
+<!--
+  Axiom Planner
+  Copyright (c) 2026 Dhruv Patel. All Rights Reserved.
+  See LICENSE for terms. Unauthorized reuse, redistribution, or use
+  for AI training is prohibited.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Axiom</title>
   <meta name="description" content="A flexible, calm planner for students." />
-  <!-- Initial favicon is a 1x1 transparent PNG; gets replaced by JS once the Three.js cube renders -->
+  <!-- Privacy / no-indexing — this is a private app, not for crawlers or AI training -->
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+  <meta name="googlebot" content="noindex, nofollow" />
+  <meta name="bingbot" content="noindex, nofollow" />
+  <!-- Block AI training crawlers that respect content tags -->
+  <meta name="ai-content-declaration" content="no-ai-training" />
+  <meta name="robots" content="noai, noimageai" />
+  <!-- Copyright -->
+  <meta name="copyright" content="Copyright (c) 2026 Dhruv Patel. All Rights Reserved." />
+  <meta name="author" content="Dhruv Patel" />
   <link rel="icon" type="image/png" id="favicon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,6 +30,33 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+
+  <!-- Maintenance overlay — full-screen, shown when API returns 503 with maintenance:true -->
+  <div id="maintenanceOverlay" class="maintenance-overlay" aria-hidden="true" style="display:none">
+    <div class="maintenance-card">
+      <!-- Subtle hex pattern in the background of the card -->
+      <svg class="maintenance-hexpattern" aria-hidden="true" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <pattern id="hexgrid" x="0" y="0" width="56" height="48.5" patternUnits="userSpaceOnUse">
+            <path d="M28 0 L56 16 L56 48 L28 64 L0 48 L0 16 Z" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.6"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#hexgrid)"/>
+      </svg>
+      <div class="maintenance-content">
+        <div class="maintenance-pulse">
+          <span class="maintenance-pulse-dot"></span>
+          <span class="maintenance-pulse-label">Maintenance</span>
+        </div>
+        <h1 class="maintenance-title">We'll be right back.</h1>
+        <p class="maintenance-message" id="maintenanceMessage">We're making things better. Back in a few minutes.</p>
+        <p class="maintenance-foot">
+          <span class="maintenance-spinner"></span>
+          <span id="maintenanceCheckText">Checking again every few seconds…</span>
+        </p>
+      </div>
+    </div>
+  </div>
 
   <!-- Three.js geometric layer (wireframes + particles) — sits on top of bg-scene -->
   <div id="geoBg" class="geo-bg" aria-hidden="true"></div>
@@ -42,7 +84,7 @@
   <div id="authScreen" class="screen active">
     <div class="auth-wrap">
       <div class="auth-brand">
-        <div class="auth-logo-3d" id="authLogo3D"></div>
+        <img class="auth-logo" id="authLogoImg" alt="" />
         <div class="auth-wordmark">Axiom</div>
       </div>
 
@@ -54,21 +96,14 @@
           <button class="tab active" data-tab="login">Sign in</button>
           <button class="tab" data-tab="signup">Create account</button>
         </div>
-
         <form id="authForm" class="auth-form">
-          <label>
-            <span>Username</span>
-            <input type="text" id="authUsername" autocomplete="username" required minlength="3" />
-          </label>
-          <label>
-            <span>Password</span>
-            <input type="password" id="authPassword" autocomplete="current-password" required minlength="4" />
-          </label>
+          <label><span>Username</span><input type="text" id="authUsername" autocomplete="username" required minlength="3" /></label>
+          <label><span>Password</span><input type="password" id="authPassword" autocomplete="current-password" required minlength="4" /></label>
           <div id="authError" class="auth-error"></div>
           <button type="submit" class="btn-primary" id="authSubmit">Continue</button>
         </form>
-
         <p class="auth-foot">Built with care, for students.</p>
+        <p class="auth-copyright">© 2026 Dhruv Patel · All Rights Reserved</p>
       </div>
     </div>
   </div>
@@ -79,7 +114,7 @@
       <div class="sidebar-top">
         <div class="brand">
           <div class="logo-stage" id="logoStage">
-            <div class="logo-3d-mount" id="logoMount3D"></div>
+            <img class="logo-img" id="brandLogoImg" alt="Axiom logo" />
             <button class="logo-fab logo-fab-fav" id="logoFavBtn" title="Favorite" aria-label="Favorite">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
             </button>
@@ -89,6 +124,11 @@
           </div>
           <div class="brand-name">Axiom</div>
         </div>
+        <button class="search-trigger" id="searchTrigger" title="Search (⌘K)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <span class="search-trigger-label">Search</span>
+          <kbd class="kbd">⌘K</kbd>
+        </button>
       </div>
 
       <nav class="nav">
@@ -107,6 +147,10 @@
         <button class="nav-item" data-view="calendar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
           <span>Calendar</span>
+        </button>
+        <button class="nav-item" data-view="study">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Study AI</span>
         </button>
         <button class="nav-item" data-view="notes">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
@@ -127,7 +171,16 @@
       </nav>
 
       <div class="sidebar-bottom">
-        <!-- Live activity widget — daily progress -->
+        <!-- Quick theme toggle: Dawn for energy, Calm for studying -->
+        <div class="theme-switcher" role="tablist" aria-label="Theme">
+          <button type="button" data-theme-btn="dawn" title="Dawn — energetic, warm" class="active">
+            <span class="theme-icon theme-icon-dawn"></span>Dawn
+          </button>
+          <button type="button" data-theme-btn="calm" title="Calm — peaceful, for studying">
+            <span class="theme-icon theme-icon-calm"></span>Calm
+          </button>
+        </div>
+
         <div class="activity-widget" id="activityWidget">
           <div class="activity-ring-wrap">
             <svg class="activity-ring" viewBox="0 0 60 60">
@@ -151,11 +204,15 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
           </button>
         </div>
+
+        <div class="copyright-footer">
+          <span class="copyright-mark">©</span>
+          <span class="copyright-text">2026 Dhruv Patel · All Rights Reserved</span>
+        </div>
       </div>
     </aside>
 
     <main class="main">
-      <!-- Test/Quiz alert banner -->
       <div id="examBanner" class="exam-banner" style="display:none">
         <div class="exam-banner-icon">⚡</div>
         <div class="exam-banner-text">
@@ -165,7 +222,7 @@
         <button class="exam-banner-close" id="examBannerClose">×</button>
       </div>
 
-      <!-- ============ TODAY ============ -->
+      <!-- TODAY -->
       <section class="view active" data-view="today">
         <header class="view-head">
           <p class="view-kicker" id="todayDate">—</p>
@@ -173,14 +230,12 @@
           <p class="view-sub" id="todaySub">Here's where things stand.</p>
         </header>
 
-        <!-- Single hero focus card -->
-        <div class="focus-card" id="focusCard">
+        <div class="focus-card glass-strong" id="focusCard">
           <div class="focus-eyebrow" id="focusEyebrow">Right now</div>
           <div class="focus-headline" id="focusHeadline">—</div>
           <div class="focus-tasks" id="focusTasks"></div>
         </div>
 
-        <!-- Live progress hero — animates as you complete tasks -->
         <div class="progress-hero" id="progressHero">
           <svg class="progress-hero-ring" viewBox="0 0 120 120">
             <circle class="progress-hero-bg" cx="60" cy="60" r="52"/>
@@ -201,12 +256,11 @@
             </div>
             <div class="progress-hero-stat">
               <div class="progress-hero-stat-num" id="progressHeroPercent">0%</div>
-              <div class="progress-hero-stat-label">Today's progress</div>
+              <div class="progress-hero-stat-label">Today</div>
             </div>
           </div>
         </div>
 
-        <!-- Compact secondary panels -->
         <div class="today-grid" id="todayGrid">
           <div class="panel panel-warn" id="overduePanel" data-pref="show_overdue">
             <h3 class="panel-title"><span class="dot dot-danger"></span>Overdue</h3>
@@ -237,14 +291,17 @@
         </div>
       </section>
 
-      <!-- ============ TASKS ============ -->
+      <!-- TASKS -->
       <section class="view" data-view="tasks">
         <header class="view-head row">
           <div>
             <p class="view-kicker">Tasks</p>
             <h1 class="view-title">What needs doing.</h1>
           </div>
-          <button class="btn-primary" id="newTaskBtn">+ New task</button>
+          <div class="row gap">
+            <button class="btn-ghost" id="recurringBtn">↻ Recurring</button>
+            <button class="btn-primary" id="newTaskBtn">+ New task</button>
+          </div>
         </header>
 
         <div class="task-filters" id="taskFilters">
@@ -256,15 +313,13 @@
           <button class="chip" data-filter="week">This week</button>
           <button class="chip" data-filter="exams">Tests &amp; quizzes</button>
           <span class="filter-sep"></span>
-          <select class="chip-select" id="subjectFilterSelect">
-            <option value="">All classes</option>
-          </select>
+          <select class="chip-select" id="subjectFilterSelect"><option value="">All classes</option></select>
         </div>
 
         <div id="tasksList" class="list big"></div>
       </section>
 
-      <!-- ============ CLASSES ============ -->
+      <!-- CLASSES -->
       <section class="view" data-view="subjects">
         <header class="view-head row">
           <div>
@@ -285,7 +340,7 @@
         <div class="subjects-grid" id="subjectsGrid"></div>
       </section>
 
-      <!-- ============ CALENDAR ============ -->
+      <!-- CALENDAR -->
       <section class="view" data-view="calendar">
         <header class="view-head row">
           <div>
@@ -310,7 +365,30 @@
         </div>
       </section>
 
-      <!-- ============ NOTES ============ -->
+      <!-- STUDY -->
+      <section class="view" data-view="study">
+        <header class="view-head row">
+          <div>
+            <p class="view-kicker">Study companion</p>
+            <h1 class="view-title">Turn anything into a study guide.</h1>
+            <p class="view-sub">Upload PDFs, paste your notes, drop photos of your textbook. Gemini or Claude builds you a study guide with flashcards, practice questions, and chat to ask follow-ups.</p>
+          </div>
+          <button class="btn-primary" id="newStudyGuideBtn">+ New study guide</button>
+        </header>
+
+        <div id="studyView" class="study-layout">
+          <!-- Left: list of guides -->
+          <div class="study-list" id="studyList"></div>
+          <!-- Right: viewer -->
+          <div class="study-viewer" id="studyViewer">
+            <div class="study-empty">
+              <p>Pick a study guide on the left, or create a new one.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- NOTES -->
       <section class="view" data-view="notes">
         <header class="view-head row">
           <div>
@@ -335,7 +413,7 @@
         </div>
       </section>
 
-      <!-- ============ REMINDERS ============ -->
+      <!-- REMINDERS -->
       <section class="view" data-view="reminders">
         <header class="view-head row">
           <div>
@@ -347,12 +425,12 @@
         <div id="remindersList" class="list big"></div>
       </section>
 
-      <!-- ============ IMPORT ============ -->
+      <!-- IMPORT -->
       <section class="view" data-view="import">
         <header class="view-head">
           <p class="view-kicker">Import</p>
           <h1 class="view-title">Bring your school in.</h1>
-          <p class="view-sub">Connect your calendar feeds. The AI does the organizing.</p>
+          <p class="view-sub">Connect your calendar feeds. Auto-syncs every 10 minutes.</p>
         </header>
 
         <div class="panel panel-soft">
@@ -360,7 +438,7 @@
             <span class="dot dot-gold"></span>AI assistant
             <span id="aiStatus" class="ai-status"></span>
           </h3>
-          <p class="panel-desc">Free Gemini API key — used to organize your assignments and match them to classes.</p>
+          <p class="panel-desc">Free Gemini API key — used to organize assignments and power Study AI.</p>
           <div id="aiKeyForm">
             <div class="row gap" style="margin-top:12px">
               <input type="password" id="geminiKeyInput" placeholder="Paste your Gemini API key" class="text-input" style="flex:1" />
@@ -377,26 +455,23 @@
         <div class="feed-pair">
           <div class="panel panel-soft">
             <h3 class="panel-title"><span class="dot dot-blue"></span>Class schedule feed</h3>
-            <p class="panel-desc">Your weekly class meetings. Used to learn <em>what classes you have</em>.</p>
+            <p class="panel-desc">Your weekly class meetings.</p>
             <div id="classesFeedList" class="feed-list"></div>
             <div id="classesFeedAdd" class="feed-add">
               <input type="text" id="classesFeedUrl" placeholder="Paste iCal URL" class="text-input" />
               <input type="text" id="classesFeedLabel" placeholder="Label (optional)" class="text-input" style="max-width:160px" />
               <button class="btn-primary" id="addClassesFeedBtn">Add</button>
             </div>
-            <p class="panel-hint">Sync this once to auto-create your classes.</p>
           </div>
-
           <div class="panel panel-soft">
             <h3 class="panel-title"><span class="dot dot-orange"></span>Assignments feed</h3>
-            <p class="panel-desc">Homework, papers, tests. Each gets matched to a class.</p>
+            <p class="panel-desc">Homework, papers, tests — auto-matched to classes.</p>
             <div id="assignmentsFeedList" class="feed-list"></div>
             <div id="assignmentsFeedAdd" class="feed-add">
               <input type="text" id="assignmentsFeedUrl" placeholder="Paste iCal URL" class="text-input" />
               <input type="text" id="assignmentsFeedLabel" placeholder="Label (optional)" class="text-input" style="max-width:160px" />
               <button class="btn-primary" id="addAssignmentsFeedBtn">Add</button>
             </div>
-            <p class="panel-hint">Best to sync classes first, then assignments.</p>
           </div>
         </div>
 
@@ -409,12 +484,12 @@
             <li>Find your school calendars in the sidebar</li>
             <li>Two-finger-click the <em>class schedule</em> calendar → Get Info → copy the URL → paste on the left</li>
             <li>Repeat for the <em>assignments</em> calendar → paste on the right</li>
-            <li>Sync classes first, then assignments — the AI will use your classes to match assignments correctly.</li>
+            <li>Sync classes first, then assignments. After that, auto-sync runs every 10 min in the background.</li>
           </ol>
         </details>
       </section>
 
-      <!-- ============ SETTINGS ============ -->
+      <!-- SETTINGS -->
       <section class="view" data-view="settings">
         <header class="view-head">
           <p class="view-kicker">Settings</p>
@@ -422,7 +497,6 @@
           <p class="view-sub">Tweak how Axiom looks, talks, and shows up for you.</p>
         </header>
 
-        <!-- Profile -->
         <div class="panel panel-soft setting-panel">
           <h3 class="panel-title">Profile</h3>
           <p class="panel-desc">How Axiom addresses you.</p>
@@ -443,11 +517,34 @@
           </div>
         </div>
 
-        <!-- Appearance -->
         <div class="panel panel-soft setting-panel">
           <h3 class="panel-title">Appearance</h3>
           <p class="panel-desc">Pick the accent that runs through buttons, highlights, and the candle glow.</p>
+
           <div class="setting-row" style="margin-top:14px">
+            <label class="setting-label">Theme</label>
+            <p class="panel-hint" style="margin:0 0 8px">Switch the whole vibe — Dawn for daily energy, Calm for studying and weekends.</p>
+            <div class="theme-picker" id="themePicker">
+              <div class="theme-card" data-theme-card="dawn">
+                <div class="theme-card-preview dawn"></div>
+                <div class="theme-card-check">✓</div>
+                <div class="theme-card-label">
+                  <span class="theme-card-name">Dawn</span>
+                  <span class="theme-card-tag">Energetic</span>
+                </div>
+              </div>
+              <div class="theme-card" data-theme-card="calm">
+                <div class="theme-card-preview calm"></div>
+                <div class="theme-card-check">✓</div>
+                <div class="theme-card-label">
+                  <span class="theme-card-name">Calm</span>
+                  <span class="theme-card-tag">Studying</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row" style="margin-top:24px">
             <label class="setting-label">Accent color</label>
             <div class="color-picker" id="accentColorPicker"></div>
             <div class="row gap" style="margin-top:10px;align-items:center;flex-wrap:wrap">
@@ -460,7 +557,7 @@
             <label class="setting-label">Logo</label>
             <div class="logo-picker">
               <div class="logo-current">
-                <div class="logo-current-3d" id="logoCurrent3D"></div>
+                <img id="logoCurrentImg" alt="" />
               </div>
               <div class="logo-controls">
                 <p id="logoMode" class="logo-mode">Random — a different cube each open.</p>
@@ -475,12 +572,12 @@
             <div style="margin-top:16px">
               <div class="setting-label" style="margin-bottom:6px">Your favorites <span style="color:var(--ink-faint);text-transform:none;letter-spacing:0;font-style:italic;font-family:var(--serif-body)">— up to 5</span></div>
               <div id="logoFavoritesRow" class="logo-favorites-row"></div>
-              <p class="logo-favorites-hint">Hover the cube in the sidebar and click ❤ to favorite. Click any favorite here to switch to it.</p>
+              <p class="logo-favorites-hint">Hover the cube in the sidebar and click ❤ to favorite.</p>
               <label class="toggle-row" style="margin-top:12px">
                 <input type="checkbox" id="rotateFavoritesToggle" />
                 <div>
                   <span class="toggle-name">Rotate only through my favorites</span>
-                  <span class="toggle-desc">Instead of all 42 cubes. Off = full rotation.</span>
+                  <span class="toggle-desc">Off = full rotation through all 42 cubes.</span>
                 </div>
               </label>
             </div>
@@ -488,53 +585,115 @@
           </div>
         </div>
 
-        <!-- Today layout -->
         <div class="panel panel-soft setting-panel">
           <h3 class="panel-title">Today layout</h3>
-          <p class="panel-desc">Which panels show up on your Today page. Hide what you don't need.</p>
+          <p class="panel-desc">Which panels show up on your Today page.</p>
           <div class="toggle-grid" id="toggleGrid">
             <label class="toggle-row">
               <input type="checkbox" id="toggle_show_overdue" />
-              <div>
-                <span class="toggle-name">Overdue</span>
-                <span class="toggle-desc">Hidden when you're caught up.</span>
-              </div>
+              <div><span class="toggle-name">Overdue</span><span class="toggle-desc">Hidden when you're caught up.</span></div>
             </label>
             <label class="toggle-row">
               <input type="checkbox" id="toggle_show_exams" />
-              <div>
-                <span class="toggle-name">Tests &amp; Quizzes</span>
-                <span class="toggle-desc">Next 14 days of exams.</span>
-              </div>
+              <div><span class="toggle-name">Tests &amp; Quizzes</span><span class="toggle-desc">Next 14 days of exams.</span></div>
             </label>
             <label class="toggle-row">
               <input type="checkbox" id="toggle_show_today" />
-              <div>
-                <span class="toggle-name">Due Today</span>
-                <span class="toggle-desc">Today's tasks at a glance.</span>
-              </div>
+              <div><span class="toggle-name">Due Today</span><span class="toggle-desc">Today's tasks at a glance.</span></div>
             </label>
             <label class="toggle-row">
               <input type="checkbox" id="toggle_show_week" />
-              <div>
-                <span class="toggle-name">This Week</span>
-                <span class="toggle-desc">Anything due in the next 7 days.</span>
-              </div>
+              <div><span class="toggle-name">This Week</span><span class="toggle-desc">Anything due in the next 7 days.</span></div>
             </label>
             <label class="toggle-row">
               <input type="checkbox" id="toggle_show_reminders_today" />
-              <div>
-                <span class="toggle-name">Reminders</span>
-                <span class="toggle-desc">Upcoming reminders. Off by default — they have their own page.</span>
-              </div>
+              <div><span class="toggle-name">Reminders</span><span class="toggle-desc">Off by default — they have their own page.</span></div>
             </label>
           </div>
         </div>
 
-        <!-- Danger zone -->
+        <div class="panel panel-soft setting-panel">
+          <h3 class="panel-title">Study companion AI</h3>
+          <p class="panel-desc">Connect Gemini and/or Claude. Used to build study guides and answer follow-up questions about your materials.</p>
+
+          <div class="setting-row" style="margin-top:14px">
+            <label class="setting-label">Gemini (Google)</label>
+            <div class="row gap" style="align-items:center;flex-wrap:wrap">
+              <input type="password" id="geminiKeyInput" class="text-input flex1" placeholder="AIza…" autocomplete="off" />
+              <button class="btn-ghost" id="geminiKeySaveBtn">Save</button>
+              <button class="btn-ghost" id="geminiKeyRemoveBtn" style="display:none">Remove</button>
+              <span class="panel-hint" id="geminiKeyStatus">Get a free key at aistudio.google.com</span>
+            </div>
+          </div>
+
+          <div class="setting-row" style="margin-top:18px">
+            <label class="setting-label">Claude (Anthropic)</label>
+            <div class="row gap" style="align-items:center;flex-wrap:wrap">
+              <input type="password" id="anthropicKeyInput" class="text-input flex1" placeholder="sk-ant-…" autocomplete="off" />
+              <button class="btn-ghost" id="anthropicKeySaveBtn">Save</button>
+              <button class="btn-ghost" id="anthropicKeyRemoveBtn" style="display:none">Remove</button>
+              <span class="panel-hint" id="anthropicKeyStatus">Get a key at console.anthropic.com</span>
+            </div>
+          </div>
+
+          <div class="setting-row" style="margin-top:18px">
+            <label class="setting-label">Default for study guides</label>
+            <select id="preferredAiSelect" class="text-input" style="max-width:220px">
+              <option value="gemini">Gemini</option>
+              <option value="claude">Claude</option>
+            </select>
+            <span class="panel-hint" style="display:block;margin-top:6px">You can override per-guide when creating one.</span>
+          </div>
+        </div>
+
+        <div class="panel panel-soft setting-panel">
+          <h3 class="panel-title">Recurring tasks</h3>
+          <p class="panel-desc">Tasks that repeat automatically — daily homework, weekly readings, etc.</p>
+          <div class="row gap" style="margin-top:12px">
+            <button class="btn-primary" id="openRecurringBtn">Manage recurring rules</button>
+          </div>
+        </div>
+
+        <!-- Owner-only: maintenance mode -->
+        <div class="panel panel-soft setting-panel owner-only" id="maintenancePanel" style="display:none">
+          <h3 class="panel-title">
+            <span class="owner-badge">OWNER</span>
+            Maintenance mode
+          </h3>
+          <p class="panel-desc">When ON, all visitors see a "we'll be right back" screen. You stay logged in and can still use the site to make fixes.</p>
+
+          <div id="maintenanceStatusRow" class="maint-status-row">
+            <span class="maint-status-dot" id="maintStatusDot"></span>
+            <span class="maint-status-label" id="maintStatusLabel">Loading…</span>
+            <span class="maint-status-when" id="maintStatusWhen"></span>
+          </div>
+
+          <div class="setting-row" style="margin-top:14px">
+            <label class="setting-label">Message visitors will see</label>
+            <textarea id="maintMessageInput" rows="3" maxlength="500" placeholder="We're making things better. Back in a few minutes."></textarea>
+            <span class="panel-hint">Up to 500 characters. Plain text only.</span>
+          </div>
+
+          <div class="setting-row" style="margin-top:12px">
+            <label class="setting-label">Admin password <span class="muted" style="text-transform:none;letter-spacing:0;font-style:italic;font-family:var(--serif-body)">(required to flip the switch)</span></label>
+            <input type="password" id="maintAdminPassword" class="text-input" placeholder="Enter admin password" autocomplete="current-password" />
+            <span class="panel-hint" id="maintAdminPasswordHint">Set ADMIN_PASSWORD in your Render environment vars.</span>
+          </div>
+
+          <div class="row gap" style="margin-top:14px">
+            <button class="btn-primary btn-danger" id="maintEnableBtn">Turn ON maintenance</button>
+            <button class="btn-ghost" id="maintDisableBtn" style="display:none">Turn OFF maintenance</button>
+          </div>
+
+          <details class="maint-audit-details" style="margin-top:18px">
+            <summary>Recent admin activity</summary>
+            <div id="maintAuditList" class="maint-audit-list"></div>
+          </details>
+        </div>
+
         <div class="panel panel-soft danger-panel setting-panel">
           <h3 class="panel-title danger-title">Clear tasks</h3>
-          <p class="panel-desc">Tidy up your task list. These actions can't be undone, so use them carefully.</p>
+          <p class="panel-desc">Tidy up your task list. These actions can't be undone.</p>
           <div class="danger-grid">
             <button class="btn-ghost" id="clearCompletedBtn">
               <strong>Clear completed</strong>
@@ -561,30 +720,37 @@
   <!-- ====== MODALS ====== -->
   <div class="modal-backdrop" id="modalBackdrop">
 
+    <!-- Search modal — ⌘K -->
+    <div class="modal modal-search glass-strong" id="searchModal">
+      <div class="search-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="opacity:0.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Search tasks, notes, classes, study guides…" autocomplete="off" />
+        <kbd class="kbd">esc</kbd>
+      </div>
+      <div class="search-results" id="searchResults"></div>
+      <div class="search-foot">
+        <span><kbd class="kbd-mini">↑↓</kbd> navigate</span>
+        <span><kbd class="kbd-mini">↵</kbd> open</span>
+        <span><kbd class="kbd-mini">esc</kbd> close</span>
+      </div>
+    </div>
+
     <!-- Task -->
-    <div class="modal" id="taskModal">
+    <div class="modal glass-strong" id="taskModal">
       <h3 class="modal-title" id="taskModalTitle">New task</h3>
       <form id="taskForm" class="modal-form">
         <label><span>What is it?</span><input type="text" id="taskTitleInput" required placeholder="e.g. Read chapters 4-5, Math test" /></label>
         <div id="autoSuggestHint" class="auto-suggest-hint" style="display:none"></div>
         <div class="row gap">
-          <label class="flex1">
-            <span>Class</span>
-            <select id="taskSubjectInput"><option value="">No class</option></select>
-          </label>
+          <label class="flex1"><span>Class</span><select id="taskSubjectInput"><option value="">No class</option></select></label>
           <label class="flex1">
             <span>Type</span>
             <select id="taskTypeInput">
-              <option value="assignment">Assignment</option>
-              <option value="homework">Homework</option>
-              <option value="reading">Reading</option>
-              <option value="essay">Essay / Paper</option>
-              <option value="exam">Exam / Test</option>
-              <option value="quiz">Quiz</option>
-              <option value="project">Project</option>
-              <option value="lab">Lab</option>
-              <option value="study">Study</option>
-              <option value="other">Other</option>
+              <option value="assignment">Assignment</option><option value="homework">Homework</option>
+              <option value="reading">Reading</option><option value="essay">Essay / Paper</option>
+              <option value="exam">Exam / Test</option><option value="quiz">Quiz</option>
+              <option value="project">Project</option><option value="lab">Lab</option>
+              <option value="study">Study</option><option value="other">Other</option>
             </select>
           </label>
         </div>
@@ -595,20 +761,19 @@
         </div>
         <label><span>Priority</span>
           <select id="taskPriorityInput">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
+            <option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option>
           </select>
         </label>
         <div class="modal-actions">
           <button type="button" class="btn-ghost modal-cancel">Cancel</button>
+          <button type="button" class="btn-ghost" id="taskFocusBtn" style="display:none">Start focus session</button>
           <button type="submit" class="btn-primary">Save</button>
         </div>
       </form>
     </div>
 
     <!-- Reminder -->
-    <div class="modal" id="reminderModal">
+    <div class="modal glass-strong" id="reminderModal">
       <h3 class="modal-title">New reminder</h3>
       <form id="reminderForm" class="modal-form">
         <label><span>Title</span><input type="text" id="reminderTitleInput" required /></label>
@@ -621,16 +786,15 @@
     </div>
 
     <!-- Subject -->
-    <div class="modal" id="subjectModal">
+    <div class="modal glass-strong" id="subjectModal">
       <h3 class="modal-title" id="subjectModalTitle">Add class</h3>
       <form id="subjectForm" class="modal-form">
-        <label><span>Class name</span><input type="text" id="subjectNameInput" required placeholder="e.g. Algebra II, English Period 3" /></label>
+        <label><span>Class name</span><input type="text" id="subjectNameInput" required placeholder="e.g. Algebra II" /></label>
         <div class="row gap">
           <label class="flex1"><span>Teacher</span><input type="text" id="subjectTeacherInput" placeholder="optional" /></label>
           <label class="flex1"><span>Room</span><input type="text" id="subjectRoomInput" placeholder="optional" /></label>
         </div>
-        <label>
-          <span>Color</span>
+        <label><span>Color</span>
           <div class="color-picker" id="subjectColorPicker"></div>
           <input type="hidden" id="subjectColorInput" value="#d4a857" />
         </label>
@@ -642,8 +806,8 @@
       </form>
     </div>
 
-    <!-- Confirm dialog (human-friendly replacement for window.confirm) -->
-    <div class="modal" id="confirmModal">
+    <!-- Confirm dialog -->
+    <div class="modal glass-strong" id="confirmModal">
       <h3 class="modal-title" id="confirmTitle">Are you sure?</h3>
       <p class="modal-body" id="confirmBody">This can't be undone.</p>
       <div class="modal-actions">
@@ -652,14 +816,12 @@
       </div>
     </div>
 
-    <!-- Clear-by-class dialog -->
-    <div class="modal" id="clearSubjectModal">
+    <!-- Clear-by-class -->
+    <div class="modal glass-strong" id="clearSubjectModal">
       <h3 class="modal-title">Clear tasks by class</h3>
       <p class="modal-body">Pick a class. Every task linked to it will be deleted.</p>
       <form id="clearSubjectForm" class="modal-form">
-        <label><span>Class</span>
-          <select id="clearSubjectSelect" required></select>
-        </label>
+        <label><span>Class</span><select id="clearSubjectSelect" required></select></label>
         <div class="modal-actions">
           <button type="button" class="btn-ghost modal-cancel">Cancel</button>
           <button type="submit" class="btn-primary btn-danger">Clear</button>
@@ -667,8 +829,8 @@
       </form>
     </div>
 
-    <!-- Clear-by-date dialog -->
-    <div class="modal" id="clearDateModal">
+    <!-- Clear-by-date -->
+    <div class="modal glass-strong" id="clearDateModal">
       <h3 class="modal-title">Clear tasks by date</h3>
       <p class="modal-body">Tasks with a due date in your selected range will be deleted.</p>
       <form id="clearDateForm" class="modal-form">
@@ -679,6 +841,104 @@
           <button type="button" class="btn-ghost modal-cancel">Cancel</button>
           <button type="submit" class="btn-primary btn-danger">Clear</button>
         </div>
+      </form>
+    </div>
+
+    <!-- Recurring rules modal -->
+    <div class="modal modal-large glass-strong" id="recurringModal">
+      <h3 class="modal-title">Recurring tasks</h3>
+      <p class="modal-body">Tasks that repeat. When one comes due, it'll auto-appear in your list.</p>
+      <div id="recurringList" class="list" style="margin-bottom:16px"></div>
+      <form id="recurringForm" class="modal-form">
+        <h4 style="font-family:var(--serif);font-size:18px;color:var(--ink);margin-bottom:8px">New rule</h4>
+        <label><span>Task title</span><input type="text" id="recurringTitleInput" required placeholder="e.g. Math homework" /></label>
+        <div class="row gap">
+          <label class="flex1"><span>Class</span><select id="recurringSubjectSelect"><option value="">No class</option></select></label>
+          <label class="flex1">
+            <span>Repeats</span>
+            <select id="recurringPatternSelect">
+              <option value="daily">Every day</option>
+              <option value="weekdays">Every weekday (Mon–Fri)</option>
+              <option value="weekly">Specific days each week</option>
+              <option value="every_n_days">Every N days</option>
+            </select>
+          </label>
+        </div>
+        <label id="recurringWeekdaysWrap" style="display:none">
+          <span>Days</span>
+          <div id="recurringWeekdaysPicker" class="weekday-picker"></div>
+        </label>
+        <label id="recurringNDaysWrap" style="display:none">
+          <span>Every how many days?</span>
+          <input type="number" id="recurringNInput" min="2" max="60" value="2" />
+        </label>
+        <label><span>Start on</span><input type="date" id="recurringStartInput" /></label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost modal-cancel">Close</button>
+          <button type="submit" class="btn-primary">Add rule</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Focus timer modal -->
+    <div class="modal modal-focus glass-strong" id="focusModal">
+      <div class="focus-timer-display">
+        <svg class="focus-timer-ring" viewBox="0 0 200 200">
+          <circle class="focus-timer-bg" cx="100" cy="100" r="90"/>
+          <circle class="focus-timer-fg" id="focusTimerFg" cx="100" cy="100" r="90"/>
+        </svg>
+        <div class="focus-timer-text">
+          <div class="focus-timer-time" id="focusTimerTime">25:00</div>
+          <div class="focus-timer-task" id="focusTimerTask">Focus session</div>
+        </div>
+      </div>
+      <div class="focus-timer-controls">
+        <div class="focus-presets" id="focusPresets" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
+          <button class="chip" data-preset="15">15 min</button>
+          <button class="chip active" data-preset="25">25 min</button>
+          <button class="chip" data-preset="45">45 min</button>
+          <button class="chip" data-preset="60">60 min</button>
+        </div>
+        <div class="row gap" style="justify-content:center">
+          <button class="btn-ghost" id="focusCancelBtn">Cancel</button>
+          <button class="btn-primary" id="focusStartBtn">Start</button>
+          <button class="btn-primary btn-danger" id="focusStopBtn" style="display:none">Stop</button>
+        </div>
+        <p class="focus-foot" id="focusFootStat" style="text-align:center;margin-top:14px;color:var(--ink-faint);font-size:12px"></p>
+      </div>
+    </div>
+
+    <!-- Study generate modal -->
+    <div class="modal modal-large glass-strong" id="studyGenerateModal">
+      <h3 class="modal-title">New study guide</h3>
+      <p class="modal-body">Drop in your materials. AI will build a study guide, key concepts, flashcards, and practice questions.</p>
+      <form id="studyGenerateForm" class="modal-form">
+        <div class="row gap">
+          <label class="flex1"><span>Title (optional)</span><input type="text" id="studyTitleInput" placeholder="AI will infer one if blank" /></label>
+          <label class="flex1"><span>Class</span><select id="studySubjectSelect"><option value="">No class</option></select></label>
+        </div>
+        <label>
+          <span>Paste your notes / textbook excerpts (optional)</span>
+          <textarea id="studyTextInput" rows="6" placeholder="Paste anything — class notes, slides, an article, a textbook section…"></textarea>
+        </label>
+        <label>
+          <span>Upload PDFs or images (optional)</span>
+          <input type="file" id="studyFileInput" accept=".pdf,image/*" multiple />
+          <div id="studyFileList" class="study-file-list"></div>
+        </label>
+        <label>
+          <span>Which AI?</span>
+          <select id="studyProviderSelect">
+            <option value="gemini">Gemini (default)</option>
+            <option value="claude">Claude (Anthropic)</option>
+          </select>
+          <span class="field-hint" id="studyProviderHint">Need to add a Claude key in Settings to use Claude.</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost modal-cancel">Cancel</button>
+          <button type="submit" class="btn-primary" id="studyGenerateBtn">Build study guide</button>
+        </div>
+        <p class="panel-hint" id="studyGenerateStatus" style="display:none">Working… this may take 20-30 seconds.</p>
       </form>
     </div>
   </div>
